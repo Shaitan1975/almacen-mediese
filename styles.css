@@ -32,10 +32,7 @@ html, body {
   line-height: 1.5;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   LOGIN
-   ═══════════════════════════════════════════════════════════ */
-
+/* LOGIN */
 .login-body {
   display: flex;
   align-items: center;
@@ -136,10 +133,7 @@ html, body {
   margin-top: 20px;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   HEADER
-   ═══════════════════════════════════════════════════════════ */
-
+/* HEADER */
 .app-header {
   background: var(--azul-primario);
   color: white;
@@ -168,10 +162,7 @@ html, body {
   font-family: inherit;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   VISTAS
-   ═══════════════════════════════════════════════════════════ */
-
+/* VISTAS */
 .app-main {
   padding: 16px;
   max-width: 800px;
@@ -180,10 +171,7 @@ html, body {
 .view-section { padding: 20px 0; }
 .hidden { display: none !important; }
 
-/* ═══════════════════════════════════════════════════════════
-   MENÚ PRINCIPAL
-   ═══════════════════════════════════════════════════════════ */
-
+/* MENÚ PRINCIPAL */
 .menu-container {
   background: white;
   border-radius: var(--radio);
@@ -248,10 +236,7 @@ html, body {
   margin-top: 2px;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   FORMULARIO
-   ═══════════════════════════════════════════════════════════ */
-
+/* FORMULARIO */
 .form-container {
   background: white;
   border-radius: var(--radio);
@@ -378,10 +363,7 @@ html, body {
 .send-status.ok { color: var(--verde-ok); font-weight: 600; }
 .send-status.error { color: var(--rojo-error); font-weight: 600; }
 
-/* ═══════════════════════════════════════════════════════════
-   ÉXITO
-   ═══════════════════════════════════════════════════════════ */
-
+/* ÉXITO */
 .exito-container {
   background: white;
   border-radius: var(--radio);
@@ -428,10 +410,7 @@ html, body {
 .exito-fila span { color: var(--gris-texto); }
 .exito-fila strong { color: var(--azul-primario); text-align: right; }
 
-/* ═══════════════════════════════════════════════════════════
-   HISTORIAL
-   ═══════════════════════════════════════════════════════════ */
-
+/* HISTORIAL */
 .historial-container {
   background: white;
   border-radius: var(--radio);
@@ -491,10 +470,7 @@ html, body {
   margin-top: 6px;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   LOADING
-   ═══════════════════════════════════════════════════════════ */
-
+/* LOADING */
 .loading-container {
   text-align: center;
   padding: 60px 20px;
@@ -509,3 +485,99 @@ html, body {
   animation: spin 1s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD
+   ═══════════════════════════════════════════════════════════ */
+
+.dashboard-container {
+  background: white;
+  border-radius: var(--radio);
+  padding: 20px;
+  box-shadow: var(--sombra);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.resumen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.resumen-card {
+  background: linear-gradient(135deg, #1F4E79, #4472C4);
+  color: white;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.resumen-card.entrada {
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+}
+
+.resumen-card.salida {
+  background: linear-gradient(135deg, #EF4444, #DC2626);
+}
+
+.resumen-card.devolucion {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+.resumen-card.total {
+  background: linear-gradient(135deg, #1F4E79, #0F2A44);
+}
+
+.resumen-numero {
+  font-size: 28px;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.resumen-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.9;
+}
+
+.filtros-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 500px) {
+  .filtros-container {
+    grid-template-columns: 1fr;
+  }
+  .resumen-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.btn-cancelar-mov {
+  background: #C00000;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-top: 6px;
+  font-family: inherit;
+}
+
+.btn-cancelar-mov:hover {
+  background: #900000;
+}
+
+.mov-usuario {
+  font-size: 11px;
+  color: var(--gris-texto);
+  margin-top: 4px;
+}
