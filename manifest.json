@@ -1,0 +1,25 @@
+{
+  "name": "Almacén Mediese",
+  "short_name": "Almacén",
+  "description": "Sistema de control de almacén para Mediese",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1F4E79",
+  "theme_color": "#1F4E79",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icono_192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icono_512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
