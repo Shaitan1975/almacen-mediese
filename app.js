@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // ALMACÉN MEDIESE - LÓGICA DE LA PWA
-// Login + Registro de Entradas/Salidas/Devoluciones
+// Login + Registro + Dashboard (Supervisor/Gerencia)
 // ═══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -16,7 +16,6 @@ const App = (() => {
   let insumoSeleccionado = null;
   let catalogoCache = null;
   let dcsCache = null;
-  let categoriaActual = null;
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -51,10 +50,6 @@ const App = (() => {
     return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 
-  /**
-   * ⚡ NUEVO: Petición directa al backend con fetch (sin JSONP)
-   * El backend responde con JSON, no con JSONP.
-   */
   async function llamarBackend(url) {
     const resp = await fetch(url, {
       method: "GET",
@@ -63,24 +58,6 @@ const App = (() => {
     });
     return await resp.json();
   }
-
-  /**
-   * Petición POST al backend
-   */
-  async function postBackend(url, payload) {
-    const resp = await fetch(url, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload),
-    });
-    return resp;
-  }
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // LOGIN
-  // ═══════════════════════════════════════════════════════════════
 
   async function verificarUsuario(usuario, password) {
     try {
@@ -160,36 +137,37 @@ const App = (() => {
       }
     });
 
-    // Botones del menú
     document.getElementById("btn-entrada").addEventListener("click", () => abrirFormulario("ENTRADA"));
     document.getElementById("btn-salida").addEventListener("click", () => abrirFormulario("SALIDA"));
     document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
     document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
 
-    // Botones del formulario
+    // Botón de Dashboard (solo supervisor, gerencia, admin)
+    const rolesConDashboard = ["supervisor", "gerencia", "admin"];
+    if (rolesConDashboard.includes(usuarioActual.rol)) {
+      const btnDash = document.getElementById("btn-dashboard");
+      if (btnDash) {
+        btnDash.classList.remove("hidden");
+        btnDash.addEventListener("click", abrirDashboard);
+      }
+    }
+
     document.getElementById("btn-cerrar-form").addEventListener("click", volverAlMenu);
     document.getElementById("btn-cancelar-form").addEventListener("click", volverAlMenu);
     document.getElementById("btn-guardar").addEventListener("click", guardarMovimiento);
 
-    // Búsqueda de insumo
     document.getElementById("buscar-insumo").addEventListener("input", buscarInsumo);
 
-    // Botones de la vista de éxito
     document.getElementById("btn-registrar-otro").addEventListener("click", () => abrirFormulario(tipoMovimientoActual));
     document.getElementById("btn-volver-menu").addEventListener("click", volverAlMenu);
 
-    // Cerrar historial
     document.getElementById("btn-cerrar-historial").addEventListener("click", volverAlMenu);
 
-    // Service Worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
 
-    // Cargar catálogos
     cargarCatalogos();
-
-    // Mostrar menú
     mostrarVista("view-menu");
   }
 
@@ -197,15 +175,12 @@ const App = (() => {
     console.log("🔵 Cargando catálogos...");
 
     try {
-      // 🔴 CORREGIDO: usar fetch directo (no JSONP)
       const urlCat = CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo";
       const cat = await llamarBackend(urlCat);
 
       if (cat.ok) {
         catalogoCache = cat.insumos;
         console.log("✅ Catálogo cargado:", catalogoCache.length, "insumos");
-      } else {
-        console.error("❌ Error en catálogo:", cat.error);
       }
     } catch (e) {
       console.error("❌ Error cargando catálogo:", e);
@@ -225,7 +200,7 @@ const App = (() => {
   }
 
   function mostrarVista(id) {
-    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading"]
+    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading", "view-dashboard"]
       .forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add("hidden");
@@ -245,7 +220,6 @@ const App = (() => {
   // ═══════════════════════════════════════════════════════════════
 
   function abrirFormulario(tipo) {
-    // Verificar permiso
     if (!usuarioActual.permisos.includes(tipo)) {
       alert("No tienes permiso para registrar " + tipo);
       return;
@@ -254,7 +228,6 @@ const App = (() => {
     tipoMovimientoActual = tipo;
     insumoSeleccionado = null;
 
-    // Resetear formulario
     document.getElementById("buscar-insumo").value = "";
     document.getElementById("info-insumo").classList.add("hidden");
     document.getElementById("resultados-busqueda").classList.add("hidden");
@@ -268,7 +241,6 @@ const App = (() => {
     document.getElementById("registro-status").textContent = "";
     document.getElementById("registro-status").className = "send-status";
 
-    // Ajustar título
     const titulos = {
       "ENTRADA": "📥 Registrar ENTRADA",
       "SALIDA": "📤 Registrar SALIDA",
@@ -276,7 +248,6 @@ const App = (() => {
     };
     document.getElementById("form-titulo").textContent = titulos[tipo] || "Registrar Movimiento";
 
-    // Mostrar/ocultar campos según tipo
     const grupoLoteTrabajo = document.getElementById("grupo-lote-trabajo");
     const grupoUbicacion = document.getElementById("grupo-ubicacion");
     const grupoProveedor = document.getElementById("grupo-proveedor");
@@ -295,9 +266,7 @@ const App = (() => {
       grupoProveedor.classList.add("hidden");
     }
 
-    // Llenar el select de ubicaciones
     llenarUbicaciones();
-
     mostrarVista("view-form");
     setTimeout(() => document.getElementById("buscar-insumo").focus(), 100);
   }
@@ -306,7 +275,6 @@ const App = (() => {
     const select = document.getElementById("ubicacion");
     select.innerHTML = '<option value="">-- Selecciona --</option>';
 
-    // Ubicaciones fijas
     const ubicacionesFijas = [
       "ALMACEN_MP", "ALMACEN_EMPAQUE", "ALMACEN_PT",
       "ALMACEN_SP", "SERVICIOS", "ADMINISTRACION", "PRODUCCION"
@@ -319,7 +287,6 @@ const App = (() => {
       select.appendChild(opt);
     });
 
-    // DCs (si están cargados)
     if (dcsCache && dcsCache.length > 0) {
       const grupo = document.createElement("optgroup");
       grupo.label = "── DCs / CEDIS ──";
@@ -376,27 +343,22 @@ const App = (() => {
 
   function seleccionarInsumo(insumo) {
     insumoSeleccionado = insumo;
-    categoriaActual = insumo.categoria;
 
     document.getElementById("buscar-insumo").value = insumo.codigo + " - " + insumo.descripcion;
     document.getElementById("resultados-busqueda").classList.add("hidden");
 
-    // Mostrar info
     document.getElementById("info-codigo").textContent = insumo.codigo;
     document.getElementById("info-descripcion").textContent = insumo.descripcion;
     document.getElementById("info-unidad").textContent = insumo.unidad;
     document.getElementById("info-categoria").textContent = insumo.categoria;
     document.getElementById("info-insumo").classList.remove("hidden");
 
-    // Ajustar unidad
     document.getElementById("label-unidad").textContent = "(" + insumo.unidad + ")";
 
-    // Auto-llenar proveedor
     if (insumo.proveedor) {
       document.getElementById("proveedor").value = insumo.proveedor;
     }
 
-    // Auto-seleccionar ubicación
     const selectUbic = document.getElementById("ubicacion");
     for (let i = 0; i < selectUbic.options.length; i++) {
       if (selectUbic.options[i].value === insumo.ubicacion) {
@@ -450,7 +412,6 @@ const App = (() => {
     };
 
     try {
-      // Usar GET (el backend acepta GET con data=JSON)
       const url = CONFIG.APPS_SCRIPT_URL
         + "?accion=registrar_movimiento"
         + "&data=" + encodeURIComponent(JSON.stringify(payload));
@@ -463,7 +424,6 @@ const App = (() => {
         return;
       }
 
-      // Mostrar éxito
       mostrarExito(resp, cantidad);
 
     } catch (e) {
@@ -531,6 +491,166 @@ const App = (() => {
     });
 
     mostrarVista("view-historial");
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // DASHBOARD
+  // ═══════════════════════════════════════════════════════════════
+
+  function abrirDashboard() {
+    const hoy = new Date().toISOString().split("T")[0];
+    document.getElementById("filtro-fecha").value = hoy;
+    document.getElementById("filtro-tipo").value = "TODOS";
+    document.getElementById("filtro-usuario").value = "";
+
+    document.getElementById("btn-cerrar-dashboard").addEventListener("click", volverAlMenu);
+    document.getElementById("btn-aplicar-filtros").addEventListener("click", cargarDashboard);
+
+    cargarResumen();
+    cargarMovimientosDashboard();
+
+    mostrarVista("view-dashboard");
+  }
+
+  async function cargarResumen() {
+    try {
+      const fecha = document.getElementById("filtro-fecha").value;
+      const fechaFormato = formatearFecha(fecha);
+
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=resumen_dia&fecha=" + encodeURIComponent(fechaFormato);
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) throw new Error("Error al cargar resumen");
+
+      const contenedor = document.getElementById("resumen-dia");
+      contenedor.innerHTML =
+        '<div class="resumen-card entrada">' +
+          '<span class="resumen-numero">' + resp.total_entradas + '</span>' +
+          '<span class="resumen-label">Entradas</span>' +
+        '</div>' +
+        '<div class="resumen-card salida">' +
+          '<span class="resumen-numero">' + resp.total_salidas + '</span>' +
+          '<span class="resumen-label">Salidas</span>' +
+        '</div>' +
+        '<div class="resumen-card devolucion">' +
+          '<span class="resumen-numero">' + resp.total_devoluciones + '</span>' +
+          '<span class="resumen-label">Devoluciones</span>' +
+        '</div>' +
+        '<div class="resumen-card total">' +
+          '<span class="resumen-numero">' + resp.total_movimientos + '</span>' +
+          '<span class="resumen-label">Total</span>' +
+        '</div>';
+    } catch (e) {
+      console.error("Error en resumen:", e);
+    }
+  }
+
+  async function cargarMovimientosDashboard() {
+    const contenedor = document.getElementById("lista-dashboard");
+    contenedor.innerHTML = '<p style="text-align:center;">⏳ Cargando...</p>';
+
+    try {
+      const fecha = document.getElementById("filtro-fecha").value;
+      const fechaFormato = formatearFecha(fecha);
+      const tipo = document.getElementById("filtro-tipo").value;
+      const usuario = document.getElementById("filtro-usuario").value;
+
+      let url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_dia&fecha=" + encodeURIComponent(fechaFormato);
+      if (tipo && tipo !== "TODOS") url += "&tipo=" + encodeURIComponent(tipo);
+      if (usuario) url += "&usuario=" + encodeURIComponent(usuario);
+
+      const resp = await llamarBackend(url);
+      if (!resp.ok) throw new Error("Error al cargar movimientos");
+
+      mostrarMovimientosDashboard(resp.movimientos);
+    } catch (e) {
+      contenedor.innerHTML = '<p style="color:red; text-align:center;">❌ Error: ' + e.message + '</p>';
+    }
+  }
+
+  function mostrarMovimientosDashboard(movimientos) {
+    const contenedor = document.getElementById("lista-dashboard");
+    contenedor.innerHTML = "";
+
+    if (movimientos.length === 0) {
+      contenedor.innerHTML = '<p style="text-align:center; padding:20px; color:#888;">No hay movimientos en esta fecha.</p>';
+      return;
+    }
+
+    movimientos.sort((a, b) => (b.hora || "").localeCompare(a.hora || ""));
+
+    movimientos.forEach(m => {
+      const card = document.createElement("div");
+      card.className = "movimiento-card mov-" + m.tipo.toLowerCase();
+      if (m.estado === "CANCELADO") card.style.opacity = "0.5";
+
+      card.innerHTML =
+        '<div class="mov-header">' +
+          '<span class="mov-tipo">' + m.tipo + '</span>' +
+          '<span class="mov-hora">' + m.hora + '</span>' +
+        '</div>' +
+        '<div class="mov-codigo">' + m.codigo + '</div>' +
+        '<div class="mov-desc">' + m.descripcion + '</div>' +
+        '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
+        '<div class="mov-usuario">👤 ' + (m.nombre_usuario || m.usuario) + ' (' + m.rol + ')</div>' +
+        (m.lote_insumo ? '<div class="mov-usuario">📦 Lote: ' + m.lote_insumo + '</div>' : '') +
+        (m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : '');
+
+      if (m.estado !== "CANCELADO") {
+        const btnCancelar = document.createElement("button");
+        btnCancelar.className = "btn-cancelar-mov";
+        btnCancelar.textContent = "🗑️ Cancelar";
+        btnCancelar.addEventListener("click", () => cancelarMovimientoDash(m));
+        card.appendChild(btnCancelar);
+      }
+
+      contenedor.appendChild(card);
+    });
+  }
+
+  async function cancelarMovimientoDash(mov) {
+    const motivo = prompt("Motivo de la cancelación:\n\n(" + mov.codigo + " - " + mov.cantidad + " " + mov.unidad + ")");
+
+    if (motivo === null) return;
+    if (!motivo.trim()) {
+      alert("Debes ingresar un motivo");
+      return;
+    }
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=cancelar_movimiento_dashboard&data=" +
+        encodeURIComponent(JSON.stringify({
+          id_movimiento: mov.id,
+          motivo: motivo,
+          usuario: usuarioActual.user,
+          rol: usuarioActual.rol,
+        }));
+
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        alert("❌ Error: " + (resp.error || "Desconocido"));
+        return;
+      }
+
+      alert("✅ Movimiento cancelado");
+      cargarMovimientosDashboard();
+      cargarResumen();
+    } catch (e) {
+      alert("❌ Error: " + e.message);
+    }
+  }
+
+  function cargarDashboard() {
+    cargarResumen();
+    cargarMovimientosDashboard();
+  }
+
+  function formatearFecha(fechaISO) {
+    if (!fechaISO) return "";
+    const partes = fechaISO.split("-");
+    return partes[2] + "/" + partes[1] + "/" + partes[0];
   }
 
 
