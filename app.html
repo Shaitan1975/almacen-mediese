@@ -50,6 +50,9 @@
       </div>
 
       <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
+      <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
+        📊 Dashboard (Supervisor / Gerencia)
+      </button>
     </div>
   </section>
 
@@ -61,14 +64,12 @@
         <h2 id="form-titulo">Registrar Movimiento</h2>
       </div>
 
-      <!-- Paso 1: Buscar insumo -->
       <div class="input-group">
         <label for="buscar-insumo">Buscar insumo</label>
         <input type="text" id="buscar-insumo" placeholder="Escribe código o nombre (ej: HARINA, MPH0009)">
         <div id="resultados-busqueda" class="resultados-busqueda hidden"></div>
       </div>
 
-      <!-- Info del insumo seleccionado -->
       <div id="info-insumo" class="info-insumo hidden">
         <div class="info-row">
           <span class="info-label">Código:</span>
@@ -88,25 +89,21 @@
         </div>
       </div>
 
-      <!-- Lote del insumo -->
       <div class="input-group">
         <label for="lote-insumo">Lote del insumo <span class="label-opcional">(opcional en ENTRADA)</span></label>
         <input type="text" id="lote-insumo" placeholder="Ej: LMKSI-4">
       </div>
 
-      <!-- Lote de trabajo (solo para SALIDA y DEVOLUCION) -->
       <div class="input-group" id="grupo-lote-trabajo">
         <label for="lote-trabajo">Lote de trabajo</label>
         <input type="text" id="lote-trabajo" placeholder="Ej: LR7RA-1">
       </div>
 
-      <!-- Cantidad -->
       <div class="input-group">
         <label for="cantidad">Cantidad <span id="label-unidad">(KG)</span></label>
         <input type="number" id="cantidad" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
       </div>
 
-      <!-- Ubicación / DC (para salidas de PT) -->
       <div class="input-group" id="grupo-ubicacion">
         <label for="ubicacion">Ubicación / DC destino</label>
         <select id="ubicacion" class="manual-select">
@@ -114,13 +111,11 @@
         </select>
       </div>
 
-      <!-- Proveedor / Cliente (solo para ENTRADA y SALIDA) -->
       <div class="input-group" id="grupo-proveedor">
         <label for="proveedor">Proveedor / Cliente</label>
         <input type="text" id="proveedor" placeholder="Ej: TRES VILLAS / PRODUCCION">
       </div>
 
-      <!-- PU e IVA (opcional) -->
       <div class="input-group-row">
         <div class="input-group">
           <label for="pu">PU ($)</label>
@@ -132,16 +127,13 @@
         </div>
       </div>
 
-      <!-- Notas -->
       <div class="input-group">
         <label for="notas">Notas (opcional)</label>
         <input type="text" id="notas" placeholder="Ej: Compra OC-1234">
       </div>
 
-      <!-- Estado de registro -->
       <p id="registro-status" class="send-status"></p>
 
-      <!-- Botones de acción -->
       <button id="btn-guardar" class="btn-primary btn-large">
         ✅ Guardar Movimiento
       </button>
@@ -194,6 +186,46 @@
         <h2>📊 Mis Movimientos de Hoy</h2>
       </div>
       <div id="lista-movimientos" class="lista-movimientos"></div>
+    </div>
+  </section>
+
+  <!-- Vista: DASHBOARD -->
+  <section id="view-dashboard" class="view-section hidden">
+    <div class="dashboard-container">
+      <div class="form-header">
+        <button id="btn-cerrar-dashboard" class="btn-cerrar">✖</button>
+        <h2>📊 Dashboard de Movimientos</h2>
+      </div>
+
+      <div id="resumen-dia" class="resumen-grid"></div>
+
+      <div class="filtros-container">
+        <div class="input-group">
+          <label for="filtro-fecha">Fecha</label>
+          <input type="date" id="filtro-fecha">
+        </div>
+
+        <div class="input-group">
+          <label for="filtro-tipo">Tipo</label>
+          <select id="filtro-tipo" class="manual-select">
+            <option value="TODOS">Todos</option>
+            <option value="ENTRADA">Entradas</option>
+            <option value="SALIDA">Salidas</option>
+            <option value="DEVOLUCION">Devoluciones</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label for="filtro-usuario">Usuario</label>
+          <select id="filtro-usuario" class="manual-select">
+            <option value="">Todos</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="btn-aplicar-filtros" class="btn-primary">🔍 Aplicar filtros</button>
+
+      <div id="lista-dashboard" class="lista-movimientos" style="margin-top: 20px;"></div>
     </div>
   </section>
 
