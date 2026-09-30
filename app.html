@@ -16,12 +16,6 @@ const App = (() => {
   let insumoSeleccionado = null;
   let catalogoCache = null;
   let dcsCache = null;
-  let categoriaActual = null;
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // UTILIDADES
-  // ═══════════════════════════════════════════════════════════════
 
   function getSession() {
     const s = localStorage.getItem(CONFIG.SESSION_KEY);
@@ -51,10 +45,6 @@ const App = (() => {
     return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 
-  /**
-   * ⚡ NUEVO: Petición directa al backend con fetch (sin JSONP)
-   * El backend responde con JSON, no con JSONP.
-   */
   async function llamarBackend(url) {
     const resp = await fetch(url, {
       method: "GET",
@@ -63,24 +53,6 @@ const App = (() => {
     });
     return await resp.json();
   }
-
-  /**
-   * Petición POST al backend
-   */
-  async function postBackend(url, payload) {
-    const resp = await fetch(url, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload),
-    });
-    return resp;
-  }
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // LOGIN
-  // ═══════════════════════════════════════════════════════════════
 
   async function verificarUsuario(usuario, password) {
     try {
@@ -138,11 +110,6 @@ const App = (() => {
     });
   }
 
-
-  // ═══════════════════════════════════════════════════════════════
-  // APP PRINCIPAL
-  // ═══════════════════════════════════════════════════════════════
-
   function initApp() {
     usuarioActual = getSession();
     if (!usuarioActual) {
@@ -160,36 +127,27 @@ const App = (() => {
       }
     });
 
-    // Botones del menú
     document.getElementById("btn-entrada").addEventListener("click", () => abrirFormulario("ENTRADA"));
     document.getElementById("btn-salida").addEventListener("click", () => abrirFormulario("SALIDA"));
     document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
     document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
 
-    // Botones del formulario
     document.getElementById("btn-cerrar-form").addEventListener("click", volverAlMenu);
     document.getElementById("btn-cancelar-form").addEventListener("click", volverAlMenu);
     document.getElementById("btn-guardar").addEventListener("click", guardarMovimiento);
 
-    // Búsqueda de insumo
     document.getElementById("buscar-insumo").addEventListener("input", buscarInsumo);
 
-    // Botones de la vista de éxito
     document.getElementById("btn-registrar-otro").addEventListener("click", () => abrirFormulario(tipoMovimientoActual));
     document.getElementById("btn-volver-menu").addEventListener("click", volverAlMenu);
 
-    // Cerrar historial
     document.getElementById("btn-cerrar-historial").addEventListener("click", volverAlMenu);
 
-    // Service Worker
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
 
-    // Cargar catálogos
     cargarCatalogos();
-
-    // Mostrar menú
     mostrarVista("view-menu");
   }
 
@@ -197,7 +155,6 @@ const App = (() => {
     console.log("🔵 Cargando catálogos...");
 
     try {
-      // 🔴 CORREGIDO: usar fetch directo (no JSONP)
       const urlCat = CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo";
       const cat = await llamarBackend(urlCat);
 
@@ -239,13 +196,7 @@ const App = (() => {
     mostrarVista("view-menu");
   }
 
-
-  // ═══════════════════════════════════════════════════════════════
-  // FORMULARIO DE MOVIMIENTO
-  // ═══════════════════════════════════════════════════════════════
-
   function abrirFormulario(tipo) {
-    // Verificar permiso
     if (!usuarioActual.permisos.includes(tipo)) {
       alert("No tienes permiso para registrar " + tipo);
       return;
@@ -254,7 +205,6 @@ const App = (() => {
     tipoMovimientoActual = tipo;
     insumoSeleccionado = null;
 
-    // Resetear formulario
     document.getElementById("buscar-insumo").value = "";
     document.getElementById("info-insumo").classList.add("hidden");
     document.getElementById("resultados-busqueda").classList.add("hidden");
@@ -268,7 +218,6 @@ const App = (() => {
     document.getElementById("registro-status").textContent = "";
     document.getElementById("registro-status").className = "send-status";
 
-    // Ajustar título
     const titulos = {
       "ENTRADA": "📥 Registrar ENTRADA",
       "SALIDA": "📤 Registrar SALIDA",
@@ -276,7 +225,6 @@ const App = (() => {
     };
     document.getElementById("form-titulo").textContent = titulos[tipo] || "Registrar Movimiento";
 
-    // Mostrar/ocultar campos según tipo
     const grupoLoteTrabajo = document.getElementById("grupo-lote-trabajo");
     const grupoUbicacion = document.getElementById("grupo-ubicacion");
     const grupoProveedor = document.getElementById("grupo-proveedor");
@@ -295,9 +243,7 @@ const App = (() => {
       grupoProveedor.classList.add("hidden");
     }
 
-    // Llenar el select de ubicaciones
     llenarUbicaciones();
-
     mostrarVista("view-form");
     setTimeout(() => document.getElementById("buscar-insumo").focus(), 100);
   }
@@ -306,7 +252,6 @@ const App = (() => {
     const select = document.getElementById("ubicacion");
     select.innerHTML = '<option value="">-- Selecciona --</option>';
 
-    // Ubicaciones fijas
     const ubicacionesFijas = [
       "ALMACEN_MP", "ALMACEN_EMPAQUE", "ALMACEN_PT",
       "ALMACEN_SP", "SERVICIOS", "ADMINISTRACION", "PRODUCCION"
@@ -319,7 +264,6 @@ const App = (() => {
       select.appendChild(opt);
     });
 
-    // DCs (si están cargados)
     if (dcsCache && dcsCache.length > 0) {
       const grupo = document.createElement("optgroup");
       grupo.label = "── DCs / CEDIS ──";
@@ -343,7 +287,7 @@ const App = (() => {
     }
 
     if (!catalogoCache || catalogoCache.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando... espera un momento y vuelve a intentar</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando...</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -363,11 +307,10 @@ const App = (() => {
     filtrados.forEach(insumo => {
       const div = document.createElement("div");
       div.className = "resultado-item";
-      div.innerHTML = `
-        <div class="resultado-codigo">${insumo.codigo}</div>
-        <div class="resultado-desc">${insumo.descripcion}</div>
-        <div class="resultado-cat">${insumo.categoria}</div>
-      `;
+      div.innerHTML =
+        '<div class="resultado-codigo">' + insumo.codigo + '</div>' +
+        '<div class="resultado-desc">' + insumo.descripcion + '</div>' +
+        '<div class="resultado-cat">' + insumo.categoria + '</div>';
       div.addEventListener("click", () => seleccionarInsumo(insumo));
       resultados.appendChild(div);
     });
@@ -376,27 +319,22 @@ const App = (() => {
 
   function seleccionarInsumo(insumo) {
     insumoSeleccionado = insumo;
-    categoriaActual = insumo.categoria;
 
     document.getElementById("buscar-insumo").value = insumo.codigo + " - " + insumo.descripcion;
     document.getElementById("resultados-busqueda").classList.add("hidden");
 
-    // Mostrar info
     document.getElementById("info-codigo").textContent = insumo.codigo;
     document.getElementById("info-descripcion").textContent = insumo.descripcion;
     document.getElementById("info-unidad").textContent = insumo.unidad;
     document.getElementById("info-categoria").textContent = insumo.categoria;
     document.getElementById("info-insumo").classList.remove("hidden");
 
-    // Ajustar unidad
     document.getElementById("label-unidad").textContent = "(" + insumo.unidad + ")";
 
-    // Auto-llenar proveedor
     if (insumo.proveedor) {
       document.getElementById("proveedor").value = insumo.proveedor;
     }
 
-    // Auto-seleccionar ubicación
     const selectUbic = document.getElementById("ubicacion");
     for (let i = 0; i < selectUbic.options.length; i++) {
       if (selectUbic.options[i].value === insumo.ubicacion) {
@@ -405,11 +343,6 @@ const App = (() => {
       }
     }
   }
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // GUARDAR MOVIMIENTO
-  // ═══════════════════════════════════════════════════════════════
 
   async function guardarMovimiento() {
     const statusEl = document.getElementById("registro-status");
@@ -450,7 +383,6 @@ const App = (() => {
     };
 
     try {
-      // Usar GET (el backend acepta GET con data=JSON)
       const url = CONFIG.APPS_SCRIPT_URL
         + "?accion=registrar_movimiento"
         + "&data=" + encodeURIComponent(JSON.stringify(payload));
@@ -463,7 +395,6 @@ const App = (() => {
         return;
       }
 
-      // Mostrar éxito
       mostrarExito(resp, cantidad);
 
     } catch (e) {
@@ -481,11 +412,6 @@ const App = (() => {
 
     mostrarVista("view-exito");
   }
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // HISTORIAL
-  // ═══════════════════════════════════════════════════════════════
 
   async function verHistorial() {
     mostrarVista("view-loading");
@@ -517,26 +443,20 @@ const App = (() => {
     movimientos.forEach(m => {
       const card = document.createElement("div");
       card.className = "movimiento-card mov-" + m.tipo.toLowerCase();
-      card.innerHTML = `
-        <div class="mov-header">
-          <span class="mov-tipo">${m.tipo}</span>
-          <span class="mov-hora">${m.hora}</span>
-        </div>
-        <div class="mov-codigo">${m.codigo}</div>
-        <div class="mov-desc">${m.descripcion}</div>
-        <div class="mov-cantidad">${m.cantidad} ${m.unidad}</div>
-        ${m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : ""}
-      `;
+      card.innerHTML =
+        '<div class="mov-header">' +
+          '<span class="mov-tipo">' + m.tipo + '</span>' +
+          '<span class="mov-hora">' + m.hora + '</span>' +
+        '</div>' +
+        '<div class="mov-codigo">' + m.codigo + '</div>' +
+        '<div class="mov-desc">' + m.descripcion + '</div>' +
+        '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
+        (m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : '');
       contenedor.appendChild(card);
     });
 
     mostrarVista("view-historial");
   }
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // EXPORT
-  // ═══════════════════════════════════════════════════════════════
 
   return { initLogin, initApp };
 
