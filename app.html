@@ -50,6 +50,9 @@
       </div>
 
       <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
+      <button id="btn-ver-stock" class="btn-secondary" style="background: #F0FDF4; color: #15803D; border-color: #BBF7D0;">
+        📦 Ver Stock Actual
+      </button>
       <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
         📊 Dashboard (Supervisor / Gerencia)
       </button>
@@ -188,6 +191,25 @@
       <div id="lista-movimientos" class="lista-movimientos"></div>
     </div>
   </section>
+
+    <!-- Vista: STOCK ACTUAL -->
+  <section id="view-stock" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-stock" class="btn-cerrar">✖</button>
+        <h2>📦 Stock Actual</h2>
+      </div>
+
+      <div class="stock-buscador">
+        <input type="text" id="stock-buscar" placeholder="🔍 Buscar insumo por código o nombre...">
+      </div>
+
+      <div id="stock-resumen" class="stock-resumen"></div>
+
+      <div id="lista-stock" class="lista-stock"></div>
+    </div>
+  </section>
+
 
   <!-- Vista: DASHBOARD -->
   <section id="view-dashboard" class="view-section hidden">
