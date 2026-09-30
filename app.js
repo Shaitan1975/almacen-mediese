@@ -51,30 +51,30 @@ const App = (() => {
     return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 
-  function jsonp(url) {
-    return new Promise((resolve, reject) => {
-      const callbackName = "jsonp_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-      window[callbackName] = (data) => {
-        delete window[callbackName];
-        if (document.body.contains(script)) document.body.removeChild(script);
-        resolve(data);
-      };
-      const script = document.createElement("script");
-      script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callbackName;
-      script.onerror = () => {
-        delete window[callbackName];
-        if (document.body.contains(script)) document.body.removeChild(script);
-        reject(new Error("Error de red"));
-      };
-      document.body.appendChild(script);
-      setTimeout(() => {
-        if (window[callbackName]) {
-          delete window[callbackName];
-          if (document.body.contains(script)) document.body.removeChild(script);
-          reject(new Error("Timeout"));
-        }
-      }, 20000);
+  /**
+   * ⚡ NUEVO: Petición directa al backend con fetch (sin JSONP)
+   * El backend responde con JSON, no con JSONP.
+   */
+  async function llamarBackend(url) {
+    const resp = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      redirect: "follow",
     });
+    return await resp.json();
+  }
+
+  /**
+   * Petición POST al backend
+   */
+  async function postBackend(url, payload) {
+    const resp = await fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    return resp;
   }
 
 
@@ -89,7 +89,7 @@ const App = (() => {
       const user = usuarios.find(u => u.user === usuario.toLowerCase().trim());
 
       if (!user) return null;
-      if (!user.activo) return null;
+      if (user.activo === false) return null;
 
       const hashCalc = await pbkdf2Hash(password, user.salt);
       if (hashCalc === user.hash) {
@@ -186,7 +186,7 @@ const App = (() => {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
 
-    // Cargar catálogos en background
+    // Cargar catálogos
     cargarCatalogos();
 
     // Mostrar menú
@@ -194,14 +194,33 @@ const App = (() => {
   }
 
   async function cargarCatalogos() {
-    try {
-      const cat = await jsonp(CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo");
-      if (cat.ok) catalogoCache = cat.insumos;
+    console.log("🔵 Cargando catálogos...");
 
-      const dcs = await jsonp(CONFIG.APPS_SCRIPT_URL + "?accion=listar_dcs");
-      if (dcs.ok) dcsCache = dcs.dcs;
+    try {
+      // 🔴 CORREGIDO: usar fetch directo (no JSONP)
+      const urlCat = CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo";
+      const cat = await llamarBackend(urlCat);
+
+      if (cat.ok) {
+        catalogoCache = cat.insumos;
+        console.log("✅ Catálogo cargado:", catalogoCache.length, "insumos");
+      } else {
+        console.error("❌ Error en catálogo:", cat.error);
+      }
     } catch (e) {
-      console.error("Error cargando catálogos:", e);
+      console.error("❌ Error cargando catálogo:", e);
+    }
+
+    try {
+      const urlDcs = CONFIG.APPS_SCRIPT_URL + "?accion=listar_dcs";
+      const dcs = await llamarBackend(urlDcs);
+
+      if (dcs.ok) {
+        dcsCache = dcs.dcs;
+        console.log("✅ DCs cargados:", dcsCache.length);
+      }
+    } catch (e) {
+      console.error("❌ Error cargando DCs:", e);
     }
   }
 
@@ -323,8 +342,8 @@ const App = (() => {
       return;
     }
 
-    if (!catalogoCache) {
-      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando...</div>';
+    if (!catalogoCache || catalogoCache.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando... espera un momento y vuelve a intentar</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -332,7 +351,7 @@ const App = (() => {
     const filtrados = catalogoCache.filter(i =>
       i.codigo.toUpperCase().includes(query) ||
       i.descripcion.toUpperCase().includes(query)
-    ).slice(0, 15);
+    ).slice(0, 20);
 
     if (filtrados.length === 0) {
       resultados.innerHTML = '<div class="resultado-vacio">❌ Sin resultados</div>';
@@ -431,9 +450,12 @@ const App = (() => {
     };
 
     try {
-      // Enviar via GET con data=JSON (más compatible con Apps Script)
-      const url = CONFIG.APPS_SCRIPT_URL + "?accion=registrar_movimiento&data=" + encodeURIComponent(JSON.stringify(payload));
-      const resp = await jsonp(url);
+      // Usar GET (el backend acepta GET con data=JSON)
+      const url = CONFIG.APPS_SCRIPT_URL
+        + "?accion=registrar_movimiento"
+        + "&data=" + encodeURIComponent(JSON.stringify(payload));
+
+      const resp = await llamarBackend(url);
 
       if (!resp.ok) {
         statusEl.textContent = "❌ Error: " + (resp.error || "Desconocido");
@@ -471,7 +493,7 @@ const App = (() => {
 
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_hoy&usuario=" + encodeURIComponent(usuarioActual.user);
-      const resp = await jsonp(url);
+      const resp = await llamarBackend(url);
 
       if (!resp.ok) throw new Error("Error al cargar");
 
@@ -505,7 +527,6 @@ const App = (() => {
         <div class="mov-cantidad">${m.cantidad} ${m.unidad}</div>
         ${m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : ""}
       `;
-      contenedor.appendChild(div => {});
       contenedor.appendChild(card);
     });
 
