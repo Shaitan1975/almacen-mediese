@@ -1,218 +1,543 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#1F4E79">
-<title>Almacén Mediese - App</title>
-<link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css">
-</head>
-<body class="app-body">
+// ═══════════════════════════════════════════════════════════════════
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA
+// Login + Registro de Entradas/Salidas/Devoluciones
+// ═══════════════════════════════════════════════════════════════════
 
-<header class="app-header">
-  <div class="header-left">
-    <span class="header-logo">📦</span>
-    <span class="header-title">Almacén Mediese</span>
-  </div>
-  <div class="header-right">
-    <span id="user-info" class="user-info"></span>
-    <button id="btn-logout" class="btn-logout">Salir</button>
-  </div>
-</header>
+const CONFIG = {
+  APPS_SCRIPT_URL: `https://script.google.com/macros/s/AKfycbyXlL6k2nKTvquNm1G25r35RXH2LO1raFMxRqAQ5JlazN0oodWtVY_rEpYMuGc0rifpmw/exec`,
+  SESSION_KEY: "almacen_mediese_session",
+  ITERACIONES: 100000
+};
 
-<main class="app-main">
+const App = (() => {
 
-  <!-- Vista: MENÚ PRINCIPAL -->
-  <section id="view-menu" class="view-section hidden">
-    <div class="menu-container">
-      <h2 class="menu-titulo">¿Qué deseas registrar?</h2>
-      <p class="menu-descripcion">Selecciona el tipo de movimiento</p>
+  let usuarioActual = null;
+  let tipoMovimientoActual = null;
+  let insumoSeleccionado = null;
+  let catalogoCache = null;
+  let dcsCache = null;
+  let categoriaActual = null;
 
-      <div class="menu-botones">
-        <button id="btn-entrada" class="menu-btn menu-btn-entrada">
-          <span class="menu-btn-icono">📥</span>
-          <span class="menu-btn-texto">ENTRADA</span>
-          <span class="menu-btn-desc">Recibo de material</span>
-        </button>
 
-        <button id="btn-salida" class="menu-btn menu-btn-salida">
-          <span class="menu-btn-icono">📤</span>
-          <span class="menu-btn-texto">SALIDA</span>
-          <span class="menu-btn-desc">Consumo a producción</span>
-        </button>
+  // ═══════════════════════════════════════════════════════════════
+  // UTILIDADES
+  // ═══════════════════════════════════════════════════════════════
 
-        <button id="btn-devolucion" class="menu-btn menu-btn-devolucion">
-          <span class="menu-btn-icono">🔄</span>
-          <span class="menu-btn-texto">DEVOLUCIÓN</span>
-          <span class="menu-btn-desc">Retorno de sobrantes</span>
-        </button>
-      </div>
+  function getSession() {
+    const s = localStorage.getItem(CONFIG.SESSION_KEY);
+    return s ? JSON.parse(s) : null;
+  }
 
-      <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
-    </div>
-  </section>
+  function setSession(d) {
+    localStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(d));
+  }
 
-  <!-- Vista: FORMULARIO DE MOVIMIENTO -->
-  <section id="view-form" class="view-section hidden">
-    <div class="form-container">
-      <div class="form-header">
-        <button id="btn-cerrar-form" class="btn-cerrar">✖</button>
-        <h2 id="form-titulo">Registrar Movimiento</h2>
-      </div>
+  function clearSession() {
+    localStorage.removeItem(CONFIG.SESSION_KEY);
+  }
 
-      <!-- Paso 1: Buscar insumo -->
-      <div class="input-group">
-        <label for="buscar-insumo">Buscar insumo</label>
-        <input type="text" id="buscar-insumo" placeholder="Escribe código o nombre (ej: HARINA, MPH0009)">
-        <div id="resultados-busqueda" class="resultados-busqueda hidden"></div>
-      </div>
+  async function pbkdf2Hash(password, saltHex) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
+    );
+    const saltBytes = new Uint8Array(
+      saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16))
+    );
+    const bits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt: saltBytes, iterations: CONFIG.ITERACIONES, hash: "SHA-256" },
+      keyMaterial, 256
+    );
+    return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
 
-      <!-- Info del insumo seleccionado -->
-      <div id="info-insumo" class="info-insumo hidden">
-        <div class="info-row">
-          <span class="info-label">Código:</span>
-          <span id="info-codigo" class="info-value">-</span>
+  /**
+   * ⚡ NUEVO: Petición directa al backend con fetch (sin JSONP)
+   * El backend responde con JSON, no con JSONP.
+   */
+  async function llamarBackend(url) {
+    const resp = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+      redirect: "follow",
+    });
+    return await resp.json();
+  }
+
+  /**
+   * Petición POST al backend
+   */
+  async function postBackend(url, payload) {
+    const resp = await fetch(url, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    return resp;
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOGIN
+  // ═══════════════════════════════════════════════════════════════
+
+  async function verificarUsuario(usuario, password) {
+    try {
+      const resp = await fetch("usuarios.json?t=" + Date.now(), { cache: "no-store" });
+      const usuarios = await resp.json();
+      const user = usuarios.find(u => u.user === usuario.toLowerCase().trim());
+
+      if (!user) return null;
+      if (user.activo === false) return null;
+
+      const hashCalc = await pbkdf2Hash(password, user.salt);
+      if (hashCalc === user.hash) {
+        return {
+          user: user.user,
+          nombre: user.nombre,
+          rol: user.rol,
+          permisos: user.permisos || [],
+        };
+      }
+      return null;
+    } catch (e) {
+      console.error("Error al verificar usuario:", e);
+      return null;
+    }
+  }
+
+  function initLogin() {
+    if (getSession()) {
+      window.location.href = "app.html";
+      return;
+    }
+
+    const form = document.getElementById("login-form");
+    const errorMsg = document.getElementById("error-msg");
+    const btn = form.querySelector("button");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorMsg.textContent = "";
+      btn.disabled = true;
+      btn.textContent = "Verificando...";
+
+      const usuario = document.getElementById("usuario").value;
+      const password = document.getElementById("password").value;
+      const user = await verificarUsuario(usuario, password);
+
+      if (user) {
+        setSession(user);
+        window.location.href = "app.html";
+      } else {
+        errorMsg.textContent = "Usuario o contraseña incorrectos";
+        btn.disabled = false;
+        btn.textContent = "Entrar";
+      }
+    });
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // APP PRINCIPAL
+  // ═══════════════════════════════════════════════════════════════
+
+  function initApp() {
+    usuarioActual = getSession();
+    if (!usuarioActual) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    document.getElementById("user-info").textContent =
+      usuarioActual.nombre + " (" + usuarioActual.rol + ")";
+
+    document.getElementById("btn-logout").addEventListener("click", () => {
+      if (confirm("¿Cerrar sesión?")) {
+        clearSession();
+        window.location.href = "index.html";
+      }
+    });
+
+    // Botones del menú
+    document.getElementById("btn-entrada").addEventListener("click", () => abrirFormulario("ENTRADA"));
+    document.getElementById("btn-salida").addEventListener("click", () => abrirFormulario("SALIDA"));
+    document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
+    document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
+
+    // Botones del formulario
+    document.getElementById("btn-cerrar-form").addEventListener("click", volverAlMenu);
+    document.getElementById("btn-cancelar-form").addEventListener("click", volverAlMenu);
+    document.getElementById("btn-guardar").addEventListener("click", guardarMovimiento);
+
+    // Búsqueda de insumo
+    document.getElementById("buscar-insumo").addEventListener("input", buscarInsumo);
+
+    // Botones de la vista de éxito
+    document.getElementById("btn-registrar-otro").addEventListener("click", () => abrirFormulario(tipoMovimientoActual));
+    document.getElementById("btn-volver-menu").addEventListener("click", volverAlMenu);
+
+    // Cerrar historial
+    document.getElementById("btn-cerrar-historial").addEventListener("click", volverAlMenu);
+
+    // Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+
+    // Cargar catálogos
+    cargarCatalogos();
+
+    // Mostrar menú
+    mostrarVista("view-menu");
+  }
+
+  async function cargarCatalogos() {
+    console.log("🔵 Cargando catálogos...");
+
+    try {
+      // 🔴 CORREGIDO: usar fetch directo (no JSONP)
+      const urlCat = CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo";
+      const cat = await llamarBackend(urlCat);
+
+      if (cat.ok) {
+        catalogoCache = cat.insumos;
+        console.log("✅ Catálogo cargado:", catalogoCache.length, "insumos");
+      } else {
+        console.error("❌ Error en catálogo:", cat.error);
+      }
+    } catch (e) {
+      console.error("❌ Error cargando catálogo:", e);
+    }
+
+    try {
+      const urlDcs = CONFIG.APPS_SCRIPT_URL + "?accion=listar_dcs";
+      const dcs = await llamarBackend(urlDcs);
+
+      if (dcs.ok) {
+        dcsCache = dcs.dcs;
+        console.log("✅ DCs cargados:", dcsCache.length);
+      }
+    } catch (e) {
+      console.error("❌ Error cargando DCs:", e);
+    }
+  }
+
+  function mostrarVista(id) {
+    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading"]
+      .forEach(v => {
+        const el = document.getElementById(v);
+        if (el) el.classList.add("hidden");
+      });
+    document.getElementById(id).classList.remove("hidden");
+  }
+
+  function volverAlMenu() {
+    insumoSeleccionado = null;
+    tipoMovimientoActual = null;
+    mostrarVista("view-menu");
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // FORMULARIO DE MOVIMIENTO
+  // ═══════════════════════════════════════════════════════════════
+
+  function abrirFormulario(tipo) {
+    // Verificar permiso
+    if (!usuarioActual.permisos.includes(tipo)) {
+      alert("No tienes permiso para registrar " + tipo);
+      return;
+    }
+
+    tipoMovimientoActual = tipo;
+    insumoSeleccionado = null;
+
+    // Resetear formulario
+    document.getElementById("buscar-insumo").value = "";
+    document.getElementById("info-insumo").classList.add("hidden");
+    document.getElementById("resultados-busqueda").classList.add("hidden");
+    document.getElementById("lote-insumo").value = "";
+    document.getElementById("lote-trabajo").value = "";
+    document.getElementById("cantidad").value = "";
+    document.getElementById("proveedor").value = "";
+    document.getElementById("pu").value = "";
+    document.getElementById("iva").value = "";
+    document.getElementById("notas").value = "";
+    document.getElementById("registro-status").textContent = "";
+    document.getElementById("registro-status").className = "send-status";
+
+    // Ajustar título
+    const titulos = {
+      "ENTRADA": "📥 Registrar ENTRADA",
+      "SALIDA": "📤 Registrar SALIDA",
+      "DEVOLUCION": "🔄 Registrar DEVOLUCIÓN",
+    };
+    document.getElementById("form-titulo").textContent = titulos[tipo] || "Registrar Movimiento";
+
+    // Mostrar/ocultar campos según tipo
+    const grupoLoteTrabajo = document.getElementById("grupo-lote-trabajo");
+    const grupoUbicacion = document.getElementById("grupo-ubicacion");
+    const grupoProveedor = document.getElementById("grupo-proveedor");
+
+    if (tipo === "ENTRADA") {
+      grupoLoteTrabajo.classList.add("hidden");
+      grupoUbicacion.classList.remove("hidden");
+      grupoProveedor.classList.remove("hidden");
+    } else if (tipo === "SALIDA") {
+      grupoLoteTrabajo.classList.remove("hidden");
+      grupoUbicacion.classList.remove("hidden");
+      grupoProveedor.classList.remove("hidden");
+    } else if (tipo === "DEVOLUCION") {
+      grupoLoteTrabajo.classList.remove("hidden");
+      grupoUbicacion.classList.remove("hidden");
+      grupoProveedor.classList.add("hidden");
+    }
+
+    // Llenar el select de ubicaciones
+    llenarUbicaciones();
+
+    mostrarVista("view-form");
+    setTimeout(() => document.getElementById("buscar-insumo").focus(), 100);
+  }
+
+  function llenarUbicaciones() {
+    const select = document.getElementById("ubicacion");
+    select.innerHTML = '<option value="">-- Selecciona --</option>';
+
+    // Ubicaciones fijas
+    const ubicacionesFijas = [
+      "ALMACEN_MP", "ALMACEN_EMPAQUE", "ALMACEN_PT",
+      "ALMACEN_SP", "SERVICIOS", "ADMINISTRACION", "PRODUCCION"
+    ];
+
+    ubicacionesFijas.forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      select.appendChild(opt);
+    });
+
+    // DCs (si están cargados)
+    if (dcsCache && dcsCache.length > 0) {
+      const grupo = document.createElement("optgroup");
+      grupo.label = "── DCs / CEDIS ──";
+      dcsCache.forEach(dc => {
+        const opt = document.createElement("option");
+        opt.value = dc.dc;
+        opt.textContent = dc.dc + " - " + dc.ciudad + ", " + dc.estado;
+        grupo.appendChild(opt);
+      });
+      select.appendChild(grupo);
+    }
+  }
+
+  function buscarInsumo() {
+    const query = document.getElementById("buscar-insumo").value.trim().toUpperCase();
+    const resultados = document.getElementById("resultados-busqueda");
+
+    if (query.length < 2) {
+      resultados.classList.add("hidden");
+      return;
+    }
+
+    if (!catalogoCache || catalogoCache.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando... espera un momento y vuelve a intentar</div>';
+      resultados.classList.remove("hidden");
+      return;
+    }
+
+    const filtrados = catalogoCache.filter(i =>
+      i.codigo.toUpperCase().includes(query) ||
+      i.descripcion.toUpperCase().includes(query)
+    ).slice(0, 20);
+
+    if (filtrados.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">❌ Sin resultados</div>';
+      resultados.classList.remove("hidden");
+      return;
+    }
+
+    resultados.innerHTML = "";
+    filtrados.forEach(insumo => {
+      const div = document.createElement("div");
+      div.className = "resultado-item";
+      div.innerHTML = `
+        <div class="resultado-codigo">${insumo.codigo}</div>
+        <div class="resultado-desc">${insumo.descripcion}</div>
+        <div class="resultado-cat">${insumo.categoria}</div>
+      `;
+      div.addEventListener("click", () => seleccionarInsumo(insumo));
+      resultados.appendChild(div);
+    });
+    resultados.classList.remove("hidden");
+  }
+
+  function seleccionarInsumo(insumo) {
+    insumoSeleccionado = insumo;
+    categoriaActual = insumo.categoria;
+
+    document.getElementById("buscar-insumo").value = insumo.codigo + " - " + insumo.descripcion;
+    document.getElementById("resultados-busqueda").classList.add("hidden");
+
+    // Mostrar info
+    document.getElementById("info-codigo").textContent = insumo.codigo;
+    document.getElementById("info-descripcion").textContent = insumo.descripcion;
+    document.getElementById("info-unidad").textContent = insumo.unidad;
+    document.getElementById("info-categoria").textContent = insumo.categoria;
+    document.getElementById("info-insumo").classList.remove("hidden");
+
+    // Ajustar unidad
+    document.getElementById("label-unidad").textContent = "(" + insumo.unidad + ")";
+
+    // Auto-llenar proveedor
+    if (insumo.proveedor) {
+      document.getElementById("proveedor").value = insumo.proveedor;
+    }
+
+    // Auto-seleccionar ubicación
+    const selectUbic = document.getElementById("ubicacion");
+    for (let i = 0; i < selectUbic.options.length; i++) {
+      if (selectUbic.options[i].value === insumo.ubicacion) {
+        selectUbic.selectedIndex = i;
+        break;
+      }
+    }
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // GUARDAR MOVIMIENTO
+  // ═══════════════════════════════════════════════════════════════
+
+  async function guardarMovimiento() {
+    const statusEl = document.getElementById("registro-status");
+
+    if (!insumoSeleccionado) {
+      statusEl.textContent = "❌ Selecciona un insumo";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    const cantidad = parseFloat(document.getElementById("cantidad").value);
+    if (!cantidad || cantidad <= 0) {
+      statusEl.textContent = "❌ Cantidad inválida";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    statusEl.textContent = "⏳ Guardando...";
+    statusEl.className = "send-status";
+
+    const payload = {
+      accion: "registrar_movimiento",
+      tipo_movimiento: tipoMovimientoActual,
+      codigo_oar: insumoSeleccionado.codigo,
+      descripcion: insumoSeleccionado.descripcion,
+      unidad: insumoSeleccionado.unidad,
+      lote_insumo: document.getElementById("lote-insumo").value.trim(),
+      lote_trabajo: document.getElementById("lote-trabajo").value.trim(),
+      cantidad: cantidad,
+      ubicacion: document.getElementById("ubicacion").value,
+      proveedor_cliente: document.getElementById("proveedor").value.trim(),
+      pu: parseFloat(document.getElementById("pu").value) || 0,
+      iva: parseFloat(document.getElementById("iva").value) || 0,
+      notas: document.getElementById("notas").value.trim(),
+      usuario: usuarioActual.user,
+      nombre_usuario: usuarioActual.nombre,
+      rol: usuarioActual.rol,
+    };
+
+    try {
+      // Usar GET (el backend acepta GET con data=JSON)
+      const url = CONFIG.APPS_SCRIPT_URL
+        + "?accion=registrar_movimiento"
+        + "&data=" + encodeURIComponent(JSON.stringify(payload));
+
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        statusEl.textContent = "❌ Error: " + (resp.error || "Desconocido");
+        statusEl.className = "send-status error";
+        return;
+      }
+
+      // Mostrar éxito
+      mostrarExito(resp, cantidad);
+
+    } catch (e) {
+      statusEl.textContent = "❌ Error: " + e.message;
+      statusEl.className = "send-status error";
+    }
+  }
+
+  function mostrarExito(resp, cantidad) {
+    document.getElementById("exito-id").textContent = resp.id_movimiento || "-";
+    document.getElementById("exito-tipo").textContent = tipoMovimientoActual;
+    document.getElementById("exito-insumo").textContent = insumoSeleccionado.codigo + " - " + insumoSeleccionado.descripcion;
+    document.getElementById("exito-cantidad").textContent = cantidad + " " + insumoSeleccionado.unidad;
+    document.getElementById("exito-fecha").textContent = (resp.fecha || "") + " " + (resp.hora || "");
+
+    mostrarVista("view-exito");
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // HISTORIAL
+  // ═══════════════════════════════════════════════════════════════
+
+  async function verHistorial() {
+    mostrarVista("view-loading");
+    document.getElementById("loading-text").textContent = "Cargando movimientos...";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_hoy&usuario=" + encodeURIComponent(usuarioActual.user);
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) throw new Error("Error al cargar");
+
+      mostrarListaMovimientos(resp.movimientos);
+    } catch (e) {
+      alert("Error: " + e.message);
+      volverAlMenu();
+    }
+  }
+
+  function mostrarListaMovimientos(movimientos) {
+    const contenedor = document.getElementById("lista-movimientos");
+    contenedor.innerHTML = "";
+
+    if (movimientos.length === 0) {
+      contenedor.innerHTML = '<p style="text-align:center; padding:30px; color:#888;">No tienes movimientos hoy.</p>';
+      mostrarVista("view-historial");
+      return;
+    }
+
+    movimientos.forEach(m => {
+      const card = document.createElement("div");
+      card.className = "movimiento-card mov-" + m.tipo.toLowerCase();
+      card.innerHTML = `
+        <div class="mov-header">
+          <span class="mov-tipo">${m.tipo}</span>
+          <span class="mov-hora">${m.hora}</span>
         </div>
-        <div class="info-row">
-          <span class="info-label">Descripción:</span>
-          <span id="info-descripcion" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Unidad:</span>
-          <span id="info-unidad" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Categoría:</span>
-          <span id="info-categoria" class="info-value">-</span>
-        </div>
-      </div>
+        <div class="mov-codigo">${m.codigo}</div>
+        <div class="mov-desc">${m.descripcion}</div>
+        <div class="mov-cantidad">${m.cantidad} ${m.unidad}</div>
+        ${m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : ""}
+      `;
+      contenedor.appendChild(card);
+    });
 
-      <!-- Lote del insumo -->
-      <div class="input-group">
-        <label for="lote-insumo">Lote del insumo <span class="label-opcional">(opcional en ENTRADA)</span></label>
-        <input type="text" id="lote-insumo" placeholder="Ej: LMKSI-4">
-      </div>
+    mostrarVista("view-historial");
+  }
 
-      <!-- Lote de trabajo (solo para SALIDA y DEVOLUCION) -->
-      <div class="input-group" id="grupo-lote-trabajo">
-        <label for="lote-trabajo">Lote de trabajo</label>
-        <input type="text" id="lote-trabajo" placeholder="Ej: LR7RA-1">
-      </div>
 
-      <!-- Cantidad -->
-      <div class="input-group">
-        <label for="cantidad">Cantidad <span id="label-unidad">(KG)</span></label>
-        <input type="number" id="cantidad" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
-      </div>
+  // ═══════════════════════════════════════════════════════════════
+  // EXPORT
+  // ═══════════════════════════════════════════════════════════════
 
-      <!-- Ubicación / DC (para salidas de PT) -->
-      <div class="input-group" id="grupo-ubicacion">
-        <label for="ubicacion">Ubicación / DC destino</label>
-        <select id="ubicacion" class="manual-select">
-          <option value="">-- Selecciona --</option>
-        </select>
-      </div>
+  return { initLogin, initApp };
 
-      <!-- Proveedor / Cliente (solo para ENTRADA y SALIDA) -->
-      <div class="input-group" id="grupo-proveedor">
-        <label for="proveedor">Proveedor / Cliente</label>
-        <input type="text" id="proveedor" placeholder="Ej: TRES VILLAS / PRODUCCION">
-      </div>
-
-      <!-- PU e IVA (opcional) -->
-      <div class="input-group-row">
-        <div class="input-group">
-          <label for="pu">PU ($)</label>
-          <input type="number" id="pu" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
-        </div>
-        <div class="input-group">
-          <label for="iva">IVA ($)</label>
-          <input type="number" id="iva" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
-        </div>
-      </div>
-
-      <!-- Notas -->
-      <div class="input-group">
-        <label for="notas">Notas (opcional)</label>
-        <input type="text" id="notas" placeholder="Ej: Compra OC-1234">
-      </div>
-
-      <!-- Estado de registro -->
-      <p id="registro-status" class="send-status"></p>
-
-      <!-- Botones de acción -->
-      <button id="btn-guardar" class="btn-primary btn-large">
-        ✅ Guardar Movimiento
-      </button>
-      <button id="btn-cancelar-form" class="btn-secondary">
-        Cancelar
-      </button>
-    </div>
-  </section>
-
-  <!-- Vista: CONFIRMACIÓN -->
-  <section id="view-exito" class="view-section hidden">
-    <div class="exito-container">
-      <div class="exito-icono">✅</div>
-      <h2 class="exito-titulo">¡Movimiento Registrado!</h2>
-      <p id="exito-subtitulo" class="exito-subtitulo">Se guardó correctamente</p>
-
-      <div class="exito-detalle">
-        <div class="exito-fila">
-          <span>ID:</span>
-          <strong id="exito-id">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Tipo:</span>
-          <strong id="exito-tipo">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Insumo:</span>
-          <strong id="exito-insumo">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Cantidad:</span>
-          <strong id="exito-cantidad">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Fecha/Hora:</span>
-          <strong id="exito-fecha">-</strong>
-        </div>
-      </div>
-
-      <button id="btn-registrar-otro" class="btn-primary btn-large">🔄 Registrar otro</button>
-      <button id="btn-volver-menu" class="btn-secondary">Volver al menú</button>
-    </div>
-  </section>
-
-  <!-- Vista: HISTORIAL -->
-  <section id="view-historial" class="view-section hidden">
-    <div class="historial-container">
-      <div class="form-header">
-        <button id="btn-cerrar-historial" class="btn-cerrar">✖</button>
-        <h2>📊 Mis Movimientos de Hoy</h2>
-      </div>
-      <div id="lista-movimientos" class="lista-movimientos"></div>
-    </div>
-  </section>
-
-  <!-- Vista: LOADING -->
-  <section id="view-loading" class="view-section hidden">
-    <div class="loading-container">
-      <div class="spinner"></div>
-      <p id="loading-text">Cargando...</p>
-    </div>
-  </section>
-
-</main>
-
-<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
-<script src="app.js"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    App.initApp();
-  });
-</script>
-</body>
-</html>
+})();
