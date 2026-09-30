@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA
-// Login + Registro + Dashboard (Supervisor/Gerencia)
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.0)
+// Login + Registro + Dashboard + Stock en tiempo real
 // ═══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -16,6 +16,7 @@ const App = (() => {
   let insumoSeleccionado = null;
   let catalogoCache = null;
   let dcsCache = null;
+  let stockCache = null;
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -141,6 +142,7 @@ const App = (() => {
     document.getElementById("btn-salida").addEventListener("click", () => abrirFormulario("SALIDA"));
     document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
     document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
+    document.getElementById("btn-ver-stock").addEventListener("click", verStock);
 
     // Botón de Dashboard (solo supervisor, gerencia, admin)
     const rolesConDashboard = ["supervisor", "gerencia", "admin"];
@@ -200,7 +202,7 @@ const App = (() => {
   }
 
   function mostrarVista(id) {
-    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading", "view-dashboard"]
+    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading", "view-dashboard", "view-stock"]
       .forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add("hidden");
@@ -230,6 +232,7 @@ const App = (() => {
 
     document.getElementById("buscar-insumo").value = "";
     document.getElementById("info-insumo").classList.add("hidden");
+    document.getElementById("info-stock").classList.add("hidden");
     document.getElementById("resultados-busqueda").classList.add("hidden");
     document.getElementById("lote-insumo").value = "";
     document.getElementById("lote-trabajo").value = "";
@@ -366,6 +369,9 @@ const App = (() => {
         break;
       }
     }
+
+    // Consultar stock actual del insumo
+    consultarStockInsumo(insumo.codigo);
   }
 
 
@@ -651,6 +657,157 @@ const App = (() => {
     if (!fechaISO) return "";
     const partes = fechaISO.split("-");
     return partes[2] + "/" + partes[1] + "/" + partes[0];
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // STOCK ACTUAL
+  // ═══════════════════════════════════════════════════════════════
+
+  async function verStock() {
+    mostrarVista("view-loading");
+    document.getElementById("loading-text").textContent = "Cargando stock...";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_stock";
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) throw new Error("Error al cargar stock");
+
+      stockCache = resp.items;
+
+      document.getElementById("btn-cerrar-stock").addEventListener("click", volverAlMenu);
+      document.getElementById("stock-buscar").value = "";
+      document.getElementById("stock-buscar").addEventListener("input", filtrarStock);
+
+      renderizarStock(stockCache);
+      mostrarVista("view-stock");
+    } catch (e) {
+      alert("Error al cargar stock: " + e.message);
+      volverAlMenu();
+    }
+  }
+
+  function filtrarStock() {
+    const query = document.getElementById("stock-buscar").value.trim().toUpperCase();
+
+    if (!query) {
+      renderizarStock(stockCache);
+      return;
+    }
+
+    const filtrados = stockCache.filter(item =>
+      String(item.codigo).toUpperCase().includes(query) ||
+      String(item.descripcion).toUpperCase().includes(query) ||
+      String(item.lote).toUpperCase().includes(query)
+    );
+
+    renderizarStock(filtrados);
+  }
+
+  function renderizarStock(items) {
+    const contenedor = document.getElementById("lista-stock");
+    const resumen = document.getElementById("stock-resumen");
+
+    const totalItems = items.length;
+    const totalSaldoPositivo = items.filter(i => i.saldo > 0).length;
+    const totalSaldoCero = items.filter(i => i.saldo === 0).length;
+
+    resumen.innerHTML =
+      '<div class="stock-resumen-card">' +
+        '<span class="stock-resumen-numero">' + totalItems + '</span>' +
+        '<span class="stock-resumen-label">Insumos / Lotes</span>' +
+      '</div>' +
+      '<div class="stock-resumen-card">' +
+        '<span class="stock-resumen-numero">' + totalSaldoPositivo + '</span>' +
+        '<span class="stock-resumen-label">Con Stock</span>' +
+      '</div>' +
+      '<div class="stock-resumen-card">' +
+        '<span class="stock-resumen-numero">' + totalSaldoCero + '</span>' +
+        '<span class="stock-resumen-label">Sin Stock</span>' +
+      '</div>';
+
+    contenedor.innerHTML = "";
+
+    if (items.length === 0) {
+      contenedor.innerHTML = '<div class="stock-vacio">📭 No hay insumos en stock</div>';
+      return;
+    }
+
+    items.sort((a, b) => {
+      if ((a.saldo > 0) !== (b.saldo > 0)) return a.saldo > 0 ? -1 : 1;
+      return String(a.codigo).localeCompare(String(b.codigo));
+    });
+
+    items.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "stock-item";
+
+      if (item.saldo === 0) {
+        div.classList.add("stock-cero");
+      } else if (item.saldo < 100) {
+        div.classList.add("stock-bajo");
+      }
+
+      const saldoFormateado = Number(item.saldo).toLocaleString("es-MX", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      });
+
+      div.innerHTML =
+        '<div class="stock-item-header">' +
+          '<span class="stock-item-codigo">' + item.codigo + '</span>' +
+          '<span class="stock-item-saldo">' + saldoFormateado + ' ' + (item.unidad || '') + '</span>' +
+        '</div>' +
+        '<div class="stock-item-desc">' + (item.descripcion || '-') + '</div>' +
+        '<div class="stock-item-info">' +
+          '<span>📦 Lote: <strong>' + (item.lote || 'SIN_LOTE') + '</strong></span>' +
+          '<span>📍 <strong>' + (item.ubicacion || '-') + '</strong></span>' +
+        '</div>';
+
+      contenedor.appendChild(div);
+    });
+  }
+
+  async function consultarStockInsumo(codigo) {
+    const panel = document.getElementById("info-stock");
+    const valor = document.getElementById("info-stock-valor");
+
+    if (!panel || !valor) {
+      console.warn("Panel de stock no encontrado en el HTML");
+      return;
+    }
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=stock_insumo_total&codigo=" + encodeURIComponent(codigo);
+      const resp = await llamarBackend(url);
+
+      if (resp.ok) {
+        const total = Number(resp.saldo_total) || 0;
+        const unidad = insumoSeleccionado && insumoSeleccionado.unidad ? insumoSeleccionado.unidad : "";
+        const formateado = total.toLocaleString("es-MX", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2
+        });
+
+        valor.textContent = formateado + " " + unidad;
+        panel.classList.remove("hidden");
+
+        if (total === 0) {
+          panel.classList.add("warning");
+          valor.textContent = formateado + " " + unidad + " (sin stock)";
+        } else if (total < 100) {
+          panel.classList.add("warning");
+        } else {
+          panel.classList.remove("warning");
+        }
+      } else {
+        panel.classList.add("hidden");
+      }
+    } catch (e) {
+      console.error("Error consultando stock:", e);
+      panel.classList.add("hidden");
+    }
   }
 
 
