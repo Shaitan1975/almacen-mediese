@@ -402,6 +402,76 @@ const App = (() => {
       return;
     }
 
+        // Validar stock suficiente en SALIDAS
+    if (tipoMovimientoActual === "SALIDA") {
+      const loteInsumo = document.getElementById("lote-insumo").value.trim();
+
+      statusEl.textContent = "⏳ Validando stock...";
+      statusEl.className = "send-status";
+
+      try {
+        const urlStock = CONFIG.APPS_SCRIPT_URL + "?accion=stock_insumo_total&codigo=" +
+          encodeURIComponent(insumoSeleccionado.codigo);
+        const respStock = await llamarBackend(urlStock);
+
+        if (respStock.ok) {
+          const stockDisponible = Number(respStock.saldo_total) || 0;
+          const unidad = insumoSeleccionado.unidad || "";
+
+          // Si se especificó lote, validar solo ese lote
+          if (loteInsumo) {
+            const loteInfo = respStock.lotes.find(l => l.lote === loteInsumo);
+            const stockLote = loteInfo ? Number(loteInfo.saldo) : 0;
+
+            if (cantidad > stockLote) {
+              const formateado = stockLote.toLocaleString("es-MX");
+              statusEl.textContent = "❌ Stock insuficiente en lote " + loteInsumo +
+                ". Disponible: " + formateado + " " + unidad +
+                " | Solicitado: " + cantidad + " " + unidad;
+              statusEl.className = "send-status error";
+
+              const continuar = confirm(
+                "⚠️ STOCK INSUFICIENTE\n\n" +
+                "Lote: " + loteInsumo + "\n" +
+                "Disponible: " + formateado + " " + unidad + "\n" +
+                "Solicitado: " + cantidad + " " + unidad + "\n\n" +
+                "¿Deseas continuar de todos modos? (el stock quedará negativo)"
+              );
+
+              if (!continuar) {
+                return;
+              }
+            }
+          } else {
+            // Sin lote específico, validar stock total
+            if (cantidad > stockDisponible) {
+              const formateado = stockDisponible.toLocaleString("es-MX");
+              statusEl.textContent = "❌ Stock insuficiente. Disponible: " + formateado + " " + unidad;
+              statusEl.className = "send-status error";
+
+              const continuar = confirm(
+                "⚠️ STOCK INSUFICIENTE\n\n" +
+                "Insumo: " + insumoSeleccionado.codigo + "\n" +
+                "Disponible: " + formateado + " " + unidad + "\n" +
+                "Solicitado: " + cantidad + " " + unidad + "\n\n" +
+                "¿Deseas continuar de todos modos? (el stock quedará negativo)"
+              );
+
+              if (!continuar) {
+                return;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Error validando stock:", e);
+        // Si falla la validación, dejar continuar (no bloquear)
+      }
+
+      statusEl.textContent = "⏳ Guardando...";
+      statusEl.className = "send-status";
+    }
+
     statusEl.textContent = "⏳ Guardando...";
     statusEl.className = "send-status";
 
