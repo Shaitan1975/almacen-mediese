@@ -131,34 +131,46 @@ const App = (() => {
       return;
     }
 
-    document.getElementById("user-info").textContent =
-      usuarioActual.nombre + " (" + usuarioActual.rol + ")";
+    const userInfo = document.getElementById("user-info");
+    if (userInfo) {
+      userInfo.textContent = usuarioActual.nombre + " (" + usuarioActual.rol + ")";
+    }
 
-    document.getElementById("btn-logout").addEventListener("click", () => {
+    // Helper para agregar eventos solo si el elemento existe
+    function addEventSafe(id, evento, handler) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener(evento, handler);
+      } else {
+        console.warn("⚠️ Elemento no encontrado: " + id);
+      }
+    }
+
+    addEventSafe("btn-logout", "click", () => {
       if (confirm("¿Cerrar sesión?")) {
         clearSession();
         window.location.href = "index.html";
       }
     });
 
-    document.getElementById("btn-entrada").addEventListener("click", () => abrirFormulario("ENTRADA"));
-    document.getElementById("btn-salida").addEventListener("click", () => abrirFormulario("SALIDA"));
-    document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
-    document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
-    document.getElementById("btn-ver-stock").addEventListener("click", verStock);
+    addEventSafe("btn-entrada", "click", () => abrirFormulario("ENTRADA"));
+    addEventSafe("btn-salida", "click", () => abrirFormulario("SALIDA"));
+    addEventSafe("btn-devolucion", "click", () => abrirFormulario("DEVOLUCION"));
+    addEventSafe("btn-ver-historial", "click", verHistorial);
+    addEventSafe("btn-ver-stock", "click", verStock);
 
-    // Mostrar botones de lotes solo a supervisor+
+    // Botones de lotes (solo supervisor+)
     const rolesConLotes = ["supervisor", "gerencia", "admin"];
     if (rolesConLotes.includes(usuarioActual.rol)) {
       const menuLotes = document.getElementById("menu-botones-lotes");
       if (menuLotes) {
         menuLotes.classList.remove("hidden");
-        document.getElementById("btn-abrir-lote").addEventListener("click", abrirFormularioAbrirLote);
-        document.getElementById("btn-cerrar-lote").addEventListener("click", abrirFormularioCerrarLote);
+        addEventSafe("btn-abrir-lote", "click", abrirFormularioAbrirLote);
+        addEventSafe("btn-cerrar-lote", "click", abrirFormularioCerrarLote);
       }
     }
 
-    // Botón de Dashboard (solo supervisor, gerencia, admin)
+    // Botón de Dashboard
     const rolesConDashboard = ["supervisor", "gerencia", "admin"];
     if (rolesConDashboard.includes(usuarioActual.rol)) {
       const btnDash = document.getElementById("btn-dashboard");
@@ -168,16 +180,16 @@ const App = (() => {
       }
     }
 
-    document.getElementById("btn-cerrar-form").addEventListener("click", volverAlMenu);
-    document.getElementById("btn-cancelar-form").addEventListener("click", volverAlMenu);
-    document.getElementById("btn-guardar").addEventListener("click", guardarMovimiento);
+    addEventSafe("btn-cerrar-form", "click", volverAlMenu);
+    addEventSafe("btn-cancelar-form", "click", volverAlMenu);
+    addEventSafe("btn-guardar", "click", guardarMovimiento);
 
-    document.getElementById("buscar-insumo").addEventListener("input", buscarInsumo);
+    addEventSafe("buscar-insumo", "input", buscarInsumo);
 
-    document.getElementById("btn-registrar-otro").addEventListener("click", () => abrirFormulario(tipoMovimientoActual));
-    document.getElementById("btn-volver-menu").addEventListener("click", volverAlMenu);
+    addEventSafe("btn-registrar-otro", "click", () => abrirFormulario(tipoMovimientoActual));
+    addEventSafe("btn-volver-menu", "click", volverAlMenu);
 
-    document.getElementById("btn-cerrar-historial").addEventListener("click", volverAlMenu);
+    addEventSafe("btn-cerrar-historial", "click", volverAlMenu);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
@@ -1189,53 +1201,9 @@ const App = (() => {
       console.error("Error al cargar movimientos del lote:", e);
     }
   }
-  async function onLoteSeleccionadoCerrar() {
-    const lote = loteSeleccionadoCerrar ? loteSeleccionadoCerrar.lote : "";
-
-    if (!lote || !lotesCache) {
-      document.getElementById("cerrar-lote-info").classList.add("hidden");
-      document.getElementById("cerrar-lote-resumen").classList.add("hidden");
-      document.getElementById("grupo-cerrar-piezas").style.display = "none";
-      document.getElementById("grupo-cerrar-kilos").style.display = "none";
-      return;
-    }
-
-    const info = lotesCache.find(l => l.lote === lote);
-    if (!info) return;
-
-    loteSeleccionadoCerrar = info;
-
-    document.getElementById("cerrar-lote-lote").textContent = info.lote;
-    document.getElementById("cerrar-lote-codigo").textContent = info.codigo_oar;
-    document.getElementById("cerrar-lote-descripcion").textContent = info.descripcion;
-    document.getElementById("cerrar-lote-unidad").textContent = info.unidad || "KG";
-    document.getElementById("cerrar-lote-info").classList.remove("hidden");
-
-    if (info.unidad === "PZ") {
-      document.getElementById("grupo-cerrar-piezas").style.display = "block";
-      document.getElementById("grupo-cerrar-kilos").style.display = "none";
-    } else {
-      document.getElementById("grupo-cerrar-kilos").style.display = "block";
-      document.getElementById("grupo-cerrar-piezas").style.display = "none";
-    }
-
-    try {
-      const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote);
-      const resp = await llamarBackend(url);
-
-      if (resp.ok) {
-        document.getElementById("cerrar-lote-total-movs").textContent = resp.total_movimientos;
-        document.getElementById("cerrar-lote-total-consumido").textContent =
-          (resp.resumen.total_unidades || 0).toLocaleString("es-MX") + " " + (info.unidad || "");
-        document.getElementById("cerrar-lote-resumen").classList.remove("hidden");
-      }
-    } catch (e) {
-      console.error("Error al cargar movimientos del lote:", e);
-    }
-  }
-
+  
   async function guardarCerrarLote() {
-    const lote = document.getElementById("cerrar-lote-seleccionar").value;
+        const lote = loteSeleccionadoCerrar ? loteSeleccionadoCerrar.lote : "";
     const statusEl = document.getElementById("cerrar-lote-status");
 
     if (!lote) {
