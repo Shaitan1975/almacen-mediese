@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.2)
-// Login + Registro + Dashboard + Stock + Lotes de Trabajo
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.3)
+// Login + Registro + Dashboard + Stock + Lotes de Trabajo + PEPS
 // ═══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -255,7 +255,21 @@ const App = (() => {
     document.getElementById("info-insumo").classList.add("hidden");
     document.getElementById("info-stock").classList.add("hidden");
     document.getElementById("resultados-busqueda").classList.add("hidden");
-    document.getElementById("lote-insumo").value = "";
+
+    const selectLote = document.getElementById("lote-insumo");
+    if (selectLote) {
+      if (selectLote.tagName === "SELECT") {
+        selectLote.innerHTML = '<option value="">-- Selecciona un insumo primero --</option>';
+        selectLote.removeEventListener("change", onLoteInsumoChange);
+        selectLote.addEventListener("change", onLoteInsumoChange);
+      } else {
+        selectLote.value = "";
+      }
+    }
+
+    const infoLotePanel = document.getElementById("info-lote-insumo");
+    if (infoLotePanel) infoLotePanel.classList.add("hidden");
+
     document.getElementById("lote-trabajo").value = "";
     document.getElementById("cantidad").value = "";
     document.getElementById("proveedor").value = "";
@@ -392,6 +406,89 @@ const App = (() => {
     }
 
     consultarStockInsumo(insumo.codigo);
+    cargarLotesDisponibles(insumo.codigo);
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOTES DISPONIBLES (PEPS)
+  // ═══════════════════════════════════════════════════════════════
+
+  async function cargarLotesDisponibles(codigo) {
+    const select = document.getElementById("lote-insumo");
+    const infoPanel = document.getElementById("info-lote-insumo");
+
+    if (!select) return;
+
+    select.innerHTML = '<option value="">-- Cargando lotes... --</option>';
+    if (infoPanel) infoPanel.classList.add("hidden");
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=lotes_disponibles&codigo=" + encodeURIComponent(codigo);
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok || !resp.lotes || resp.lotes.length === 0) {
+        select.innerHTML = '<option value="">-- Sin lotes disponibles --</option>';
+        return;
+      }
+
+      select.innerHTML = '<option value="">-- Selecciona un lote --</option>';
+
+      resp.lotes.forEach((lote, index) => {
+        const opt = document.createElement("option");
+        opt.value = lote.lote;
+        opt.textContent = lote.lote + " | " + lote.saldo.toLocaleString("es-MX") + " " +
+          (lote.unidad || "") + (index === 0 ? " ⭐ (PEPS)" : "");
+        opt.dataset.saldo = lote.saldo;
+        opt.dataset.pu = lote.pu;
+        opt.dataset.iva = lote.iva;
+        opt.dataset.unidad = lote.unidad;
+        opt.dataset.fecha = lote.fecha_entrada;
+        opt.dataset.proveedor = lote.proveedor;
+        select.appendChild(opt);
+      });
+
+      if (resp.lotes.length > 0) {
+        select.selectedIndex = 1;
+        onLoteInsumoChange();
+      }
+
+    } catch (e) {
+      console.error("Error cargando lotes:", e);
+      select.innerHTML = '<option value="">-- Error al cargar --</option>';
+    }
+  }
+
+  function onLoteInsumoChange() {
+    const select = document.getElementById("lote-insumo");
+    const infoPanel = document.getElementById("info-lote-insumo");
+    const selectedOption = select.options[select.selectedIndex];
+
+    if (!selectedOption || !selectedOption.value) {
+      if (infoPanel) infoPanel.classList.add("hidden");
+      return;
+    }
+
+    const pu = parseFloat(selectedOption.dataset.pu) || 0;
+    const iva = parseFloat(selectedOption.dataset.iva) || 0;
+    const saldo = parseFloat(selectedOption.dataset.saldo) || 0;
+    const unidad = selectedOption.dataset.unidad || "";
+    const fecha = selectedOption.dataset.fecha || "";
+    const proveedor = selectedOption.dataset.proveedor || "";
+
+    const puInput = document.getElementById("pu");
+    const ivaInput = document.getElementById("iva");
+    if (puInput) puInput.value = pu;
+    if (ivaInput) ivaInput.value = iva;
+
+    if (infoPanel) {
+      infoPanel.innerHTML =
+        '<strong>📦 Lote seleccionado:</strong> ' + selectedOption.value + '<br/>' +
+        '<strong>Saldo:</strong> ' + saldo.toLocaleString("es-MX") + ' ' + unidad + '<br/>' +
+        '<strong>Fecha entrada:</strong> ' + fecha + '<br/>' +
+        '<strong>Proveedor:</strong> ' + (proveedor || "-");
+      infoPanel.classList.remove("hidden");
+    }
   }
 
 
@@ -415,9 +512,10 @@ const App = (() => {
       return;
     }
 
-    if (tipoMovimientoActual === "SALIDA") {
-      const loteInsumo = document.getElementById("lote-insumo").value.trim();
+    const loteInsumoSelect = document.getElementById("lote-insumo");
+    const loteInsumo = loteInsumoSelect ? loteInsumoSelect.value : "";
 
+    if (tipoMovimientoActual === "SALIDA") {
       statusEl.textContent = "Validando stock...";
       statusEl.className = "send-status";
 
@@ -486,7 +584,7 @@ const App = (() => {
       codigo_oar: insumoSeleccionado.codigo,
       descripcion: insumoSeleccionado.descripcion,
       unidad: insumoSeleccionado.unidad,
-      lote_insumo: document.getElementById("lote-insumo").value.trim(),
+      lote_insumo: loteInsumo,
       lote_trabajo: document.getElementById("lote-trabajo").value.trim(),
       cantidad: cantidad,
       ubicacion: document.getElementById("ubicacion").value,
