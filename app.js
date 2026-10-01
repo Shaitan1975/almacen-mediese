@@ -1072,7 +1072,8 @@ const App = (() => {
   }
 
   async function abrirFormularioCerrarLote() {
-    document.getElementById("cerrar-lote-seleccionar").innerHTML = '<option value="">-- Cargando lotes abiertos... --</option>';
+    document.getElementById("cerrar-lote-buscar").value = "";
+    document.getElementById("cerrar-lote-resultados").classList.add("hidden");
     document.getElementById("cerrar-lote-info").classList.add("hidden");
     document.getElementById("cerrar-lote-resumen").classList.add("hidden");
     document.getElementById("cerrar-lote-piezas").value = "";
@@ -1087,36 +1088,109 @@ const App = (() => {
 
     document.getElementById("btn-cerrar-cerrar-lote").addEventListener("click", volverAlMenu);
     document.getElementById("btn-cancelar-cerrar-lote").addEventListener("click", volverAlMenu);
-    document.getElementById("cerrar-lote-seleccionar").addEventListener("change", onLoteSeleccionadoCerrar);
+    document.getElementById("cerrar-lote-buscar").addEventListener("input", buscarLoteCerrar);
     document.getElementById("btn-cerrar-lote-guardar").addEventListener("click", guardarCerrarLote);
 
+    // Cargar lotes abiertos
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes_abiertos";
       const resp = await llamarBackend(url);
 
-      const select = document.getElementById("cerrar-lote-seleccionar");
-
       if (resp.ok && resp.lotes.length > 0) {
         lotesCache = resp.lotes;
-        select.innerHTML = '<option value="">-- Selecciona un lote --</option>';
-        resp.lotes.forEach(l => {
-          const opt = document.createElement("option");
-          opt.value = l.lote;
-          opt.textContent = l.lote + " - " + (l.descripcion || l.codigo_oar);
-          select.appendChild(opt);
-        });
+        console.log("✅ Lotes abiertos cargados:", lotesCache.length);
       } else {
-        select.innerHTML = '<option value="">No hay lotes abiertos</option>';
+        lotesCache = [];
+        console.warn("⚠️ No hay lotes abiertos");
       }
     } catch (e) {
-      document.getElementById("cerrar-lote-seleccionar").innerHTML = '<option value="">Error al cargar</option>';
+      lotesCache = [];
+      console.error("Error al cargar lotes:", e);
     }
 
     mostrarVista("view-cerrar-lote");
+    setTimeout(() => document.getElementById("cerrar-lote-buscar").focus(), 100);
   }
 
+  function buscarLoteCerrar() {
+    const query = document.getElementById("cerrar-lote-buscar").value.trim().toUpperCase();
+    const resultados = document.getElementById("cerrar-lote-resultados");
+
+    if (query.length < 1) {
+      resultados.classList.add("hidden");
+      return;
+    }
+
+    if (!lotesCache || lotesCache.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">⚠️ No hay lotes abiertos</div>';
+      resultados.classList.remove("hidden");
+      return;
+    }
+
+    const filtrados = lotesCache.filter(l =>
+      String(l.lote).toUpperCase().includes(query) ||
+      String(l.codigo_oar).toUpperCase().includes(query) ||
+      String(l.descripcion).toUpperCase().includes(query)
+    ).slice(0, 20);
+
+    if (filtrados.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">❌ No se encontró ese lote</div>';
+      resultados.classList.remove("hidden");
+      return;
+    }
+
+    resultados.innerHTML = "";
+    filtrados.forEach(lote => {
+      const div = document.createElement("div");
+      div.className = "resultado-item";
+      div.innerHTML = `
+        <div class="resultado-codigo">${lote.lote}</div>
+        <div class="resultado-desc">${lote.codigo_oar} - ${lote.descripcion}</div>
+        <div class="resultado-cat">📅 ${lote.fecha_apertura} · ${lote.usuario_apertura}</div>
+      `;
+      div.addEventListener("click", () => seleccionarLoteCerrar(lote));
+      resultados.appendChild(div);
+    });
+    resultados.classList.remove("hidden");
+  }
+
+  async function seleccionarLoteCerrar(lote) {
+    loteSeleccionadoCerrar = lote;
+
+    document.getElementById("cerrar-lote-buscar").value = lote.lote + " - " + lote.descripcion;
+    document.getElementById("cerrar-lote-resultados").classList.add("hidden");
+
+    document.getElementById("cerrar-lote-lote").textContent = lote.lote;
+    document.getElementById("cerrar-lote-codigo").textContent = lote.codigo_oar;
+    document.getElementById("cerrar-lote-descripcion").textContent = lote.descripcion;
+    document.getElementById("cerrar-lote-unidad").textContent = lote.unidad || "KG";
+    document.getElementById("cerrar-lote-info").classList.remove("hidden");
+
+    if (lote.unidad === "PZ") {
+      document.getElementById("grupo-cerrar-piezas").style.display = "block";
+      document.getElementById("grupo-cerrar-kilos").style.display = "none";
+    } else {
+      document.getElementById("grupo-cerrar-kilos").style.display = "block";
+      document.getElementById("grupo-cerrar-piezas").style.display = "none";
+    }
+
+    // Cargar movimientos del lote
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote.lote);
+      const resp = await llamarBackend(url);
+
+      if (resp.ok) {
+        document.getElementById("cerrar-lote-total-movs").textContent = resp.total_movimientos;
+        document.getElementById("cerrar-lote-total-consumido").textContent =
+          (resp.resumen.total_unidades || 0).toLocaleString("es-MX") + " " + (lote.unidad || "");
+        document.getElementById("cerrar-lote-resumen").classList.remove("hidden");
+      }
+    } catch (e) {
+      console.error("Error al cargar movimientos del lote:", e);
+    }
+  }
   async function onLoteSeleccionadoCerrar() {
-    const lote = document.getElementById("cerrar-lote-seleccionar").value;
+    const lote = loteSeleccionadoCerrar ? loteSeleccionadoCerrar.lote : "";
 
     if (!lote || !lotesCache) {
       document.getElementById("cerrar-lote-info").classList.add("hidden");
@@ -1165,7 +1239,7 @@ const App = (() => {
     const statusEl = document.getElementById("cerrar-lote-status");
 
     if (!lote) {
-      statusEl.textContent = "❌ Selecciona un lote";
+      statusEl.textContent = "❌ Busca y selecciona un lote";
       statusEl.className = "send-status error";
       return;
     }
