@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.1)
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.2)
 // Login + Registro + Dashboard + Stock + Lotes de Trabajo
 // ═══════════════════════════════════════════════════════════════════
 
@@ -136,13 +136,12 @@ const App = (() => {
       userInfo.textContent = usuarioActual.nombre + " (" + usuarioActual.rol + ")";
     }
 
-    // Helper para agregar eventos solo si el elemento existe
     function addEventSafe(id, evento, handler) {
       const el = document.getElementById(id);
       if (el) {
         el.addEventListener(evento, handler);
       } else {
-        console.warn("⚠️ Elemento no encontrado: " + id);
+        console.warn("Elemento no encontrado: " + id);
       }
     }
 
@@ -159,7 +158,6 @@ const App = (() => {
     addEventSafe("btn-ver-historial", "click", verHistorial);
     addEventSafe("btn-ver-stock", "click", verStock);
 
-    // Botones de lotes (solo supervisor+)
     const rolesConLotes = ["supervisor", "gerencia", "admin"];
     if (rolesConLotes.includes(usuarioActual.rol)) {
       const menuLotes = document.getElementById("menu-botones-lotes");
@@ -170,7 +168,6 @@ const App = (() => {
       }
     }
 
-    // Botón de Dashboard
     const rolesConDashboard = ["supervisor", "gerencia", "admin"];
     if (rolesConDashboard.includes(usuarioActual.rol)) {
       const btnDash = document.getElementById("btn-dashboard");
@@ -183,12 +180,9 @@ const App = (() => {
     addEventSafe("btn-cerrar-form", "click", volverAlMenu);
     addEventSafe("btn-cancelar-form", "click", volverAlMenu);
     addEventSafe("btn-guardar", "click", guardarMovimiento);
-
     addEventSafe("buscar-insumo", "input", buscarInsumo);
-
     addEventSafe("btn-registrar-otro", "click", () => abrirFormulario(tipoMovimientoActual));
     addEventSafe("btn-volver-menu", "click", volverAlMenu);
-
     addEventSafe("btn-cerrar-historial", "click", volverAlMenu);
 
     if ("serviceWorker" in navigator) {
@@ -200,7 +194,7 @@ const App = (() => {
   }
 
   async function cargarCatalogos() {
-    console.log("🔵 Cargando catálogos...");
+    console.log("Cargando catálogos...");
 
     try {
       const urlCat = CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo";
@@ -208,10 +202,10 @@ const App = (() => {
 
       if (cat.ok) {
         catalogoCache = cat.insumos;
-        console.log("✅ Catálogo cargado:", catalogoCache.length, "insumos");
+        console.log("Catálogo cargado:", catalogoCache.length, "insumos");
       }
     } catch (e) {
-      console.error("❌ Error cargando catálogo:", e);
+      console.error("Error cargando catálogo:", e);
     }
 
     try {
@@ -220,10 +214,10 @@ const App = (() => {
 
       if (dcs.ok) {
         dcsCache = dcs.dcs;
-        console.log("✅ DCs cargados:", dcsCache.length);
+        console.log("DCs cargados:", dcsCache.length);
       }
     } catch (e) {
-      console.error("❌ Error cargando DCs:", e);
+      console.error("Error cargando DCs:", e);
     }
   }
 
@@ -272,9 +266,9 @@ const App = (() => {
     document.getElementById("registro-status").className = "send-status";
 
     const titulos = {
-      "ENTRADA": "📥 Registrar ENTRADA",
-      "SALIDA": "📤 Registrar SALIDA",
-      "DEVOLUCION": "🔄 Registrar DEVOLUCIÓN",
+      "ENTRADA": "Registrar ENTRADA",
+      "SALIDA": "Registrar SALIDA",
+      "DEVOLUCION": "Registrar DEVOLUCIÓN",
     };
     document.getElementById("form-titulo").textContent = titulos[tipo] || "Registrar Movimiento";
 
@@ -340,7 +334,7 @@ const App = (() => {
     }
 
     if (!catalogoCache || catalogoCache.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando... espera un momento y vuelve a intentar</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">Catálogo cargando...</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -351,7 +345,7 @@ const App = (() => {
     ).slice(0, 20);
 
     if (filtrados.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">❌ Sin resultados</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">Sin resultados</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -409,23 +403,22 @@ const App = (() => {
     const statusEl = document.getElementById("registro-status");
 
     if (!insumoSeleccionado) {
-      statusEl.textContent = "❌ Selecciona un insumo";
+      statusEl.textContent = "Selecciona un insumo";
       statusEl.className = "send-status error";
       return;
     }
 
     const cantidad = parseFloat(document.getElementById("cantidad").value);
     if (!cantidad || cantidad <= 0) {
-      statusEl.textContent = "❌ Cantidad inválida";
+      statusEl.textContent = "Cantidad inválida";
       statusEl.className = "send-status error";
       return;
     }
 
-    // Validar stock suficiente en SALIDAS
     if (tipoMovimientoActual === "SALIDA") {
       const loteInsumo = document.getElementById("lote-insumo").value.trim();
 
-      statusEl.textContent = "⏳ Validando stock...";
+      statusEl.textContent = "Validando stock...";
       statusEl.className = "send-status";
 
       try {
@@ -443,40 +436,36 @@ const App = (() => {
 
             if (cantidad > stockLote) {
               const formateado = stockLote.toLocaleString("es-MX");
-              statusEl.textContent = "❌ Stock insuficiente en lote " + loteInsumo +
+              statusEl.textContent = "Stock insuficiente en lote " + loteInsumo +
                 ". Disponible: " + formateado + " " + unidad +
                 " | Solicitado: " + cantidad + " " + unidad;
               statusEl.className = "send-status error";
 
               const continuar = confirm(
-                "⚠️ STOCK INSUFICIENTE\n\n" +
+                "STOCK INSUFICIENTE\n\n" +
                 "Lote: " + loteInsumo + "\n" +
                 "Disponible: " + formateado + " " + unidad + "\n" +
                 "Solicitado: " + cantidad + " " + unidad + "\n\n" +
-                "¿Deseas continuar de todos modos? (el stock quedará negativo)"
+                "¿Deseas continuar de todos modos?"
               );
 
-              if (!continuar) {
-                return;
-              }
+              if (!continuar) return;
             }
           } else {
             if (cantidad > stockDisponible) {
               const formateado = stockDisponible.toLocaleString("es-MX");
-              statusEl.textContent = "❌ Stock insuficiente. Disponible: " + formateado + " " + unidad;
+              statusEl.textContent = "Stock insuficiente. Disponible: " + formateado + " " + unidad;
               statusEl.className = "send-status error";
 
               const continuar = confirm(
-                "⚠️ STOCK INSUFICIENTE\n\n" +
+                "STOCK INSUFICIENTE\n\n" +
                 "Insumo: " + insumoSeleccionado.codigo + "\n" +
                 "Disponible: " + formateado + " " + unidad + "\n" +
                 "Solicitado: " + cantidad + " " + unidad + "\n\n" +
-                "¿Deseas continuar de todos modos? (el stock quedará negativo)"
+                "¿Deseas continuar de todos modos?"
               );
 
-              if (!continuar) {
-                return;
-              }
+              if (!continuar) return;
             }
           }
         }
@@ -484,11 +473,11 @@ const App = (() => {
         console.warn("Error validando stock:", e);
       }
 
-      statusEl.textContent = "⏳ Guardando...";
+      statusEl.textContent = "Guardando...";
       statusEl.className = "send-status";
     }
 
-    statusEl.textContent = "⏳ Guardando...";
+    statusEl.textContent = "Guardando...";
     statusEl.className = "send-status";
 
     const payload = {
@@ -531,14 +520,14 @@ const App = (() => {
               }));
             const respReabrir = await llamarBackend(urlReabrir);
             if (respReabrir.ok) {
-              alert("✅ Lote reabierto. Vuelve a intentar el registro.");
+              alert("Lote reabierto. Vuelve a intentar el registro.");
             } else {
-              alert("❌ No se pudo reabrir: " + respReabrir.error);
+              alert("No se pudo reabrir: " + respReabrir.error);
             }
           }
           return;
         }
-        statusEl.textContent = "❌ Error: " + (resp.error || "Desconocido");
+        statusEl.textContent = "Error: " + (resp.error || "Desconocido");
         statusEl.className = "send-status error";
         return;
       }
@@ -546,7 +535,7 @@ const App = (() => {
       mostrarExito(resp, cantidad);
 
     } catch (e) {
-      statusEl.textContent = "❌ Error: " + e.message;
+      statusEl.textContent = "Error: " + e.message;
       statusEl.className = "send-status error";
     }
   }
@@ -604,7 +593,7 @@ const App = (() => {
         <div class="mov-codigo">${m.codigo}</div>
         <div class="mov-desc">${m.descripcion}</div>
         <div class="mov-cantidad">${m.cantidad} ${m.unidad}</div>
-        ${m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : ""}
+        ${m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : ""}
       `;
       contenedor.appendChild(card);
     });
@@ -667,7 +656,7 @@ const App = (() => {
 
   async function cargarMovimientosDashboard() {
     const contenedor = document.getElementById("lista-dashboard");
-    contenedor.innerHTML = '<p style="text-align:center;">⏳ Cargando...</p>';
+    contenedor.innerHTML = '<p style="text-align:center;">Cargando...</p>';
 
     try {
       const fecha = document.getElementById("filtro-fecha").value;
@@ -684,7 +673,7 @@ const App = (() => {
 
       mostrarMovimientosDashboard(resp.movimientos);
     } catch (e) {
-      contenedor.innerHTML = '<p style="color:red; text-align:center;">❌ Error: ' + e.message + '</p>';
+      contenedor.innerHTML = '<p style="color:red; text-align:center;">Error: ' + e.message + '</p>';
     }
   }
 
@@ -712,14 +701,14 @@ const App = (() => {
         '<div class="mov-codigo">' + m.codigo + '</div>' +
         '<div class="mov-desc">' + m.descripcion + '</div>' +
         '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
-        '<div class="mov-usuario">👤 ' + (m.nombre_usuario || m.usuario) + ' (' + m.rol + ')</div>' +
-        (m.lote_insumo ? '<div class="mov-usuario">📦 Lote: ' + m.lote_insumo + '</div>' : '') +
-        (m.estado === "CANCELADO" ? '<div class="mov-cancelado">❌ CANCELADO</div>' : '');
+        '<div class="mov-usuario">Usuario: ' + (m.nombre_usuario || m.usuario) + ' (' + m.rol + ')</div>' +
+        (m.lote_insumo ? '<div class="mov-usuario">Lote: ' + m.lote_insumo + '</div>' : '') +
+        (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
 
       if (m.estado !== "CANCELADO") {
         const btnCancelar = document.createElement("button");
         btnCancelar.className = "btn-cancelar-mov";
-        btnCancelar.textContent = "🗑️ Cancelar";
+        btnCancelar.textContent = "Cancelar";
         btnCancelar.addEventListener("click", () => cancelarMovimientoDash(m));
         card.appendChild(btnCancelar);
       }
@@ -749,15 +738,15 @@ const App = (() => {
       const resp = await llamarBackend(url);
 
       if (!resp.ok) {
-        alert("❌ Error: " + (resp.error || "Desconocido"));
+        alert("Error: " + (resp.error || "Desconocido"));
         return;
       }
 
-      alert("✅ Movimiento cancelado");
+      alert("Movimiento cancelado");
       cargarMovimientosDashboard();
       cargarResumen();
     } catch (e) {
-      alert("❌ Error: " + e.message);
+      alert("Error: " + e.message);
     }
   }
 
@@ -843,7 +832,7 @@ const App = (() => {
     contenedor.innerHTML = "";
 
     if (items.length === 0) {
-      contenedor.innerHTML = '<div class="stock-vacio">📭 No hay insumos en stock</div>';
+      contenedor.innerHTML = '<div class="stock-vacio">No hay insumos en stock</div>';
       return;
     }
 
@@ -874,8 +863,8 @@ const App = (() => {
         '</div>' +
         '<div class="stock-item-desc">' + (item.descripcion || '-') + '</div>' +
         '<div class="stock-item-info">' +
-          '<span>📦 Lote: <strong>' + (item.lote || 'SIN_LOTE') + '</strong></span>' +
-          '<span>📍 <strong>' + (item.ubicacion || '-') + '</strong></span>' +
+          '<span>Lote: <strong>' + (item.lote || 'SIN_LOTE') + '</strong></span>' +
+          '<span>' + (item.ubicacion || '-') + '</span>' +
         '</div>';
 
       contenedor.appendChild(div);
@@ -964,14 +953,14 @@ const App = (() => {
 
       if (resp.ok && resp.existe) {
         if (resp.status === "ABIERTO") {
-          aviso.textContent = "⚠️ Este lote ya está ABIERTO";
+          aviso.textContent = "Este lote ya está ABIERTO";
           aviso.className = "lote-status error";
         } else {
-          aviso.textContent = "ℹ️ Este lote ya existe (CERRADO). Se reabrirá.";
+          aviso.textContent = "Este lote ya existe (CERRADO). Se reabrirá.";
           aviso.className = "lote-status warning";
         }
       } else {
-        aviso.textContent = "✅ Lote disponible";
+        aviso.textContent = "Lote disponible";
         aviso.className = "lote-status ok";
       }
     } catch (e) {
@@ -989,7 +978,7 @@ const App = (() => {
     }
 
     if (!catalogoCache || catalogoCache.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando...</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">Catálogo cargando...</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -1000,7 +989,7 @@ const App = (() => {
     ).slice(0, 20);
 
     if (filtrados.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">❌ Sin resultados</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">Sin resultados</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -1036,18 +1025,18 @@ const App = (() => {
     const statusEl = document.getElementById("abrir-lote-status");
 
     if (!lote) {
-      statusEl.textContent = "❌ Escribe el número de lote";
+      statusEl.textContent = "Escribe el número de lote";
       statusEl.className = "send-status error";
       return;
     }
 
     if (!loteSeleccionadoAbrir) {
-      statusEl.textContent = "❌ Selecciona un código OAR";
+      statusEl.textContent = "Selecciona un código OAR";
       statusEl.className = "send-status error";
       return;
     }
 
-    statusEl.textContent = "⏳ Abriendo lote...";
+    statusEl.textContent = "Abriendo lote...";
     statusEl.className = "send-status";
 
     try {
@@ -1064,12 +1053,12 @@ const App = (() => {
       const resp = await llamarBackend(url);
 
       if (!resp.ok) {
-        statusEl.textContent = "❌ " + (resp.error || "Error desconocido");
+        statusEl.textContent = (resp.error || "Error desconocido");
         statusEl.className = "send-status error";
         return;
       }
 
-      statusEl.textContent = "✅ " + resp.mensaje;
+      statusEl.textContent = resp.mensaje;
       statusEl.className = "send-status ok";
 
       setTimeout(() => {
@@ -1078,7 +1067,7 @@ const App = (() => {
       }, 800);
 
     } catch (e) {
-      statusEl.textContent = "❌ " + e.message;
+      statusEl.textContent = e.message;
       statusEl.className = "send-status error";
     }
   }
@@ -1103,17 +1092,16 @@ const App = (() => {
     document.getElementById("cerrar-lote-buscar").addEventListener("input", buscarLoteCerrar);
     document.getElementById("btn-cerrar-lote-guardar").addEventListener("click", guardarCerrarLote);
 
-    // Cargar lotes abiertos
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes_abiertos";
       const resp = await llamarBackend(url);
 
       if (resp.ok && resp.lotes.length > 0) {
         lotesCache = resp.lotes;
-        console.log("✅ Lotes abiertos cargados:", lotesCache.length);
+        console.log("Lotes abiertos cargados:", lotesCache.length);
       } else {
         lotesCache = [];
-        console.warn("⚠️ No hay lotes abiertos");
+        console.warn("No hay lotes abiertos");
       }
     } catch (e) {
       lotesCache = [];
@@ -1134,7 +1122,7 @@ const App = (() => {
     }
 
     if (!lotesCache || lotesCache.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">⚠️ No hay lotes abiertos</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">No hay lotes abiertos</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -1146,7 +1134,7 @@ const App = (() => {
     ).slice(0, 20);
 
     if (filtrados.length === 0) {
-      resultados.innerHTML = '<div class="resultado-vacio">❌ No se encontró ese lote</div>';
+      resultados.innerHTML = '<div class="resultado-vacio">No se encontró ese lote</div>';
       resultados.classList.remove("hidden");
       return;
     }
@@ -1158,7 +1146,7 @@ const App = (() => {
       div.innerHTML = `
         <div class="resultado-codigo">${lote.lote}</div>
         <div class="resultado-desc">${lote.codigo_oar} - ${lote.descripcion}</div>
-        <div class="resultado-cat">📅 ${lote.fecha_apertura} · ${lote.usuario_apertura}</div>
+        <div class="resultado-cat">${lote.fecha_apertura} · ${lote.usuario_apertura}</div>
       `;
       div.addEventListener("click", () => seleccionarLoteCerrar(lote));
       resultados.appendChild(div);
@@ -1186,7 +1174,6 @@ const App = (() => {
       document.getElementById("grupo-cerrar-piezas").style.display = "none";
     }
 
-    // Cargar movimientos del lote
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote.lote);
       const resp = await llamarBackend(url);
@@ -1201,19 +1188,13 @@ const App = (() => {
       console.error("Error al cargar movimientos del lote:", e);
     }
   }
-  
+
   async function guardarCerrarLote() {
-        const lote = loteSeleccionadoCerrar ? loteSeleccionadoCerrar.lote : "";
+    const lote = loteSeleccionadoCerrar ? loteSeleccionadoCerrar.lote : "";
     const statusEl = document.getElementById("cerrar-lote-status");
 
     if (!lote) {
-      statusEl.textContent = "❌ Busca y selecciona un lote";
-      statusEl.className = "send-status error";
-      return;
-    }
-
-    if (!loteSeleccionadoCerrar) {
-      statusEl.textContent = "❌ Lote no válido";
+      statusEl.textContent = "Busca y selecciona un lote";
       statusEl.className = "send-status error";
       return;
     }
@@ -1223,18 +1204,18 @@ const App = (() => {
     const kilos = parseFloat(document.getElementById("cerrar-lote-kilos").value) || 0;
 
     if (unidad === "PZ" && piezas <= 0) {
-      statusEl.textContent = "❌ Ingresa las piezas producidas";
+      statusEl.textContent = "Ingresa las piezas producidas";
       statusEl.className = "send-status error";
       return;
     }
 
     if (unidad === "KG" && kilos <= 0) {
-      statusEl.textContent = "❌ Ingresa los kilos producidos";
+      statusEl.textContent = "Ingresa los kilos producidos";
       statusEl.className = "send-status error";
       return;
     }
 
-    statusEl.textContent = "⏳ Cerrando lote...";
+    statusEl.textContent = "Cerrando lote...";
     statusEl.className = "send-status";
 
     try {
@@ -1251,12 +1232,12 @@ const App = (() => {
       const resp = await llamarBackend(url);
 
       if (!resp.ok) {
-        statusEl.textContent = "❌ " + (resp.error || "Error desconocido");
+        statusEl.textContent = (resp.error || "Error desconocido");
         statusEl.className = "send-status error";
         return;
       }
 
-      statusEl.textContent = "✅ " + resp.mensaje;
+      statusEl.textContent = resp.mensaje;
       statusEl.className = "send-status ok";
 
       setTimeout(() => {
@@ -1265,7 +1246,7 @@ const App = (() => {
       }, 800);
 
     } catch (e) {
-      statusEl.textContent = "❌ " + e.message;
+      statusEl.textContent = e.message;
       statusEl.className = "send-status error";
     }
   }
