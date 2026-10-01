@@ -217,6 +217,13 @@ const App = (() => {
     document.getElementById(id).classList.remove("hidden");
   }
 
+    // ⬇️ AGREGA ESTA FUNCIÓN ⬇️
+  function volverAlMenu() {
+    insumoSeleccionado = null;
+    tipoMovimientoActual = null;
+    mostrarVista("view-menu");
+  }
+
   function volverAlMenu() {
     insumoSeleccionado = null;
     tipoMovimientoActual = null;
