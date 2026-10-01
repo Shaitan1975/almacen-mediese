@@ -820,3 +820,18 @@ html, body {
   object-fit: contain;
   vertical-align: middle;
 }
+
+/* Info del lote seleccionado */
+.info-lote {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #92400E;
+}
+
+.info-lote strong {
+  color: #78350F;
+}
