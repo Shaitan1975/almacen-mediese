@@ -143,6 +143,13 @@ const App = (() => {
     document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
     document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
     document.getElementById("btn-ver-stock").addEventListener("click", verStock);
+    // Mostrar botones de lotes solo a supervisor+ 
+    const rolesConLotes = ["supervisor", "gerencia", "admin"];
+    if (rolesConLotes.includes(usuarioActual.rol)) {
+      document.getElementById("menu-botones-lotes").classList.remove("hidden");
+      document.getElementById("btn-abrir-lote").addEventListener("click", abrirFormularioAbrirLote);
+      document.getElementById("btn-cerrar-lote").addEventListener("click", abrirFormularioCerrarLote);
+    }
 
     // Botón de Dashboard (solo supervisor, gerencia, admin)
     const rolesConDashboard = ["supervisor", "gerencia", "admin"];
@@ -202,7 +209,7 @@ const App = (() => {
   }
 
   function mostrarVista(id) {
-    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading", "view-dashboard", "view-stock"]
+        ["view-menu", "view-form", "view-exito", "view-historial", "view-loading", "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote"]
       .forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add("hidden");
