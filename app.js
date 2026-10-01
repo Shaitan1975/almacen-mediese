@@ -818,3 +818,334 @@ const App = (() => {
   return { initLogin, initApp };
 
 })();
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOTES DE TRABAJO
+  // ═══════════════════════════════════════════════════════════════
+
+  let loteSeleccionadoAbrir = null;
+  let lotesCache = null;
+
+  function abrirFormularioAbrirLote() {
+    document.getElementById("abrir-lote-numero").value = "";
+    document.getElementById("abrir-lote-buscar").value = "";
+    document.getElementById("abrir-lote-info").classList.add("hidden");
+    document.getElementById("abrir-lote-resultados").classList.add("hidden");
+    document.getElementById("abrir-lote-notas").value = "";
+    document.getElementById("abrir-lote-status").textContent = "";
+    document.getElementById("abrir-lote-status").className = "send-status";
+    document.getElementById("abrir-lote-aviso").textContent = "";
+    document.getElementById("abrir-lote-aviso").className = "lote-status";
+
+    loteSeleccionadoAbrir = null;
+
+    document.getElementById("btn-cerrar-abrir-lote").addEventListener("click", volverAlMenu);
+    document.getElementById("btn-cancelar-abrir-lote").addEventListener("click", volverAlMenu);
+    document.getElementById("abrir-lote-buscar").addEventListener("input", buscarInsumoAbrirLote);
+    document.getElementById("abrir-lote-numero").addEventListener("input", validarNumeroLote);
+    document.getElementById("btn-abrir-lote-guardar").addEventListener("click", guardarAbrirLote);
+
+    mostrarVista("view-abrir-lote");
+    setTimeout(() => document.getElementById("abrir-lote-numero").focus(), 100);
+  }
+
+  async function validarNumeroLote() {
+    const lote = document.getElementById("abrir-lote-numero").value.trim();
+    const aviso = document.getElementById("abrir-lote-aviso");
+
+    if (lote.length < 2) {
+      aviso.textContent = "";
+      aviso.className = "lote-status";
+      return;
+    }
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=validar_lote&lote=" + encodeURIComponent(lote);
+      const resp = await llamarBackend(url);
+
+      if (resp.ok && resp.existe) {
+        if (resp.status === "ABIERTO") {
+          aviso.textContent = "⚠️ Este lote ya está ABIERTO";
+          aviso.className = "lote-status error";
+        } else {
+          aviso.textContent = "ℹ️ Este lote ya existe (CERRADO). Se reabrirá.";
+          aviso.className = "lote-status warning";
+        }
+      } else {
+        aviso.textContent = "✅ Lote disponible";
+        aviso.className = "lote-status ok";
+      }
+    } catch (e) {
+      aviso.textContent = "";
+    }
+  }
+
+  function buscarInsumoAbrirLote() {
+    const query = document.getElementById("abrir-lote-buscar").value.trim().toUpperCase();
+    const resultados = document.getElementById("abrir-lote-resultados");
+
+    if (query.length < 2) {
+      resultados.classList.add("hidden");
+      return;
+    }
+
+    if (!catalogoCache || catalogoCache.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">⏳ Catálogo cargando...</div>';
+      resultados.classList.remove("hidden");
+      return;
+    }
+
+    const filtrados = catalogoCache.filter(i =>
+      i.codigo.toUpperCase().includes(query) ||
+      i.descripcion.toUpperCase().includes(query)
+    ).slice(0, 20);
+
+    if (filtrados.length === 0) {
+      resultados.innerHTML = '<div class="resultado-vacio">❌ Sin resultados</div>';
+      resultados.classList.remove("hidden");
+      return;
+    }
+
+    resultados.innerHTML = "";
+    filtrados.forEach(insumo => {
+      const div = document.createElement("div");
+      div.className = "resultado-item";
+      div.innerHTML = `
+        <div class="resultado-codigo">${insumo.codigo}</div>
+        <div class="resultado-desc">${insumo.descripcion}</div>
+        <div class="resultado-cat">${insumo.categoria}</div>
+      `;
+      div.addEventListener("click", () => seleccionarInsumoAbrirLote(insumo));
+      resultados.appendChild(div);
+    });
+    resultados.classList.remove("hidden");
+  }
+
+  function seleccionarInsumoAbrirLote(insumo) {
+    loteSeleccionadoAbrir = insumo;
+
+    document.getElementById("abrir-lote-buscar").value = insumo.codigo + " - " + insumo.descripcion;
+    document.getElementById("abrir-lote-resultados").classList.add("hidden");
+
+    document.getElementById("abrir-lote-codigo").textContent = insumo.codigo;
+    document.getElementById("abrir-lote-descripcion").textContent = insumo.descripcion;
+    document.getElementById("abrir-lote-info").classList.remove("hidden");
+  }
+
+  async function guardarAbrirLote() {
+    const lote = document.getElementById("abrir-lote-numero").value.trim();
+    const statusEl = document.getElementById("abrir-lote-status");
+
+    if (!lote) {
+      statusEl.textContent = "❌ Escribe el número de lote";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    if (!loteSeleccionadoAbrir) {
+      statusEl.textContent = "❌ Selecciona un código OAR";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    statusEl.textContent = "⏳ Abriendo lote...";
+    statusEl.className = "send-status";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=abrir_lote&data=" +
+        encodeURIComponent(JSON.stringify({
+          lote: lote,
+          codigo_oar: loteSeleccionadoAbrir.codigo,
+          descripcion: loteSeleccionadoAbrir.descripcion,
+          notas: document.getElementById("abrir-lote-notas").value.trim(),
+          usuario: usuarioActual.user,
+          rol: usuarioActual.rol,
+        }));
+
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        statusEl.textContent = "❌ " + (resp.error || "Error desconocido");
+        statusEl.className = "send-status error";
+        return;
+      }
+
+      statusEl.textContent = "✅ " + resp.mensaje;
+      statusEl.className = "send-status ok";
+
+      setTimeout(() => {
+        alert(resp.mensaje);
+        volverAlMenu();
+      }, 800);
+
+    } catch (e) {
+      statusEl.textContent = "❌ " + e.message;
+      statusEl.className = "send-status error";
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // CERRAR LOTE
+  // ─────────────────────────────────────────────────────────────
+
+  let loteSeleccionadoCerrar = null;
+
+  async function abrirFormularioCerrarLote() {
+    document.getElementById("cerrar-lote-seleccionar").innerHTML = '<option value="">-- Cargando lotes abiertos... --</option>';
+    document.getElementById("cerrar-lote-info").classList.add("hidden");
+    document.getElementById("cerrar-lote-resumen").classList.add("hidden");
+    document.getElementById("cerrar-lote-piezas").value = "";
+    document.getElementById("cerrar-lote-kilos").value = "";
+    document.getElementById("cerrar-lote-notas").value = "";
+    document.getElementById("cerrar-lote-status").textContent = "";
+    document.getElementById("cerrar-lote-status").className = "send-status";
+    document.getElementById("grupo-cerrar-piezas").style.display = "none";
+    document.getElementById("grupo-cerrar-kilos").style.display = "none";
+
+    loteSeleccionadoCerrar = null;
+
+    document.getElementById("btn-cerrar-cerrar-lote").addEventListener("click", volverAlMenu);
+    document.getElementById("btn-cancelar-cerrar-lote").addEventListener("click", volverAlMenu);
+    document.getElementById("cerrar-lote-seleccionar").addEventListener("change", onLoteSeleccionadoCerrar);
+    document.getElementById("btn-cerrar-lote-guardar").addEventListener("click", guardarCerrarLote);
+
+    // Cargar lotes abiertos
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes_abiertos";
+      const resp = await llamarBackend(url);
+
+      const select = document.getElementById("cerrar-lote-seleccionar");
+
+      if (resp.ok && resp.lotes.length > 0) {
+        lotesCache = resp.lotes;
+        select.innerHTML = '<option value="">-- Selecciona un lote --</option>';
+        resp.lotes.forEach(l => {
+          const opt = document.createElement("option");
+          opt.value = l.lote;
+          opt.textContent = l.lote + " - " + (l.descripcion || l.codigo_oar);
+          select.appendChild(opt);
+        });
+      } else {
+        select.innerHTML = '<option value="">No hay lotes abiertos</option>';
+      }
+    } catch (e) {
+      document.getElementById("cerrar-lote-seleccionar").innerHTML = '<option value="">Error al cargar</option>';
+    }
+
+    mostrarVista("view-cerrar-lote");
+  }
+
+  async function onLoteSeleccionadoCerrar() {
+    const lote = document.getElementById("cerrar-lote-seleccionar").value;
+
+    if (!lote || !lotesCache) {
+      document.getElementById("cerrar-lote-info").classList.add("hidden");
+      document.getElementById("cerrar-lote-resumen").classList.add("hidden");
+      document.getElementById("grupo-cerrar-piezas").style.display = "none";
+      document.getElementById("grupo-cerrar-kilos").style.display = "none";
+      return;
+    }
+
+    const info = lotesCache.find(l => l.lote === lote);
+    if (!info) return;
+
+    loteSeleccionadoCerrar = info;
+
+    document.getElementById("cerrar-lote-lote").textContent = info.lote;
+    document.getElementById("cerrar-lote-codigo").textContent = info.codigo_oar;
+    document.getElementById("cerrar-lote-descripcion").textContent = info.descripcion;
+    document.getElementById("cerrar-lote-unidad").textContent = info.unidad || "KG";
+    document.getElementById("cerrar-lote-info").classList.remove("hidden");
+
+    // Mostrar campo según unidad
+    if (info.unidad === "PZ") {
+      document.getElementById("grupo-cerrar-piezas").style.display = "block";
+      document.getElementById("grupo-cerrar-kilos").style.display = "none";
+    } else {
+      document.getElementById("grupo-cerrar-kilos").style.display = "block";
+      document.getElementById("grupo-cerrar-piezas").style.display = "none";
+    }
+
+    // Cargar movimientos del lote
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote);
+      const resp = await llamarBackend(url);
+
+      if (resp.ok) {
+        document.getElementById("cerrar-lote-total-movs").textContent = resp.total_movimientos;
+        document.getElementById("cerrar-lote-total-consumido").textContent =
+          (resp.resumen.total_unidades || 0).toLocaleString("es-MX") + " " + (info.unidad || "");
+        document.getElementById("cerrar-lote-resumen").classList.remove("hidden");
+      }
+    } catch (e) {
+      console.error("Error al cargar movimientos del lote:", e);
+    }
+  }
+
+  async function guardarCerrarLote() {
+    const lote = document.getElementById("cerrar-lote-seleccionar").value;
+    const statusEl = document.getElementById("cerrar-lote-status");
+
+    if (!lote) {
+      statusEl.textContent = "❌ Selecciona un lote";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    if (!loteSeleccionadoCerrar) {
+      statusEl.textContent = "❌ Lote no válido";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    const unidad = loteSeleccionadoCerrar.unidad || "KG";
+    const piezas = parseFloat(document.getElementById("cerrar-lote-piezas").value) || 0;
+    const kilos = parseFloat(document.getElementById("cerrar-lote-kilos").value) || 0;
+
+    if (unidad === "PZ" && piezas <= 0) {
+      statusEl.textContent = "❌ Ingresa las piezas producidas";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    if (unidad === "KG" && kilos <= 0) {
+      statusEl.textContent = "❌ Ingresa los kilos producidos";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    statusEl.textContent = "⏳ Cerrando lote...";
+    statusEl.className = "send-status";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=cerrar_lote&data=" +
+        encodeURIComponent(JSON.stringify({
+          lote: lote,
+          piezas_producidas: piezas,
+          kilos_producidos: kilos,
+          notas: document.getElementById("cerrar-lote-notas").value.trim(),
+          usuario: usuarioActual.user,
+          rol: usuarioActual.rol,
+        }));
+
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        statusEl.textContent = "❌ " + (resp.error || "Error desconocido");
+        statusEl.className = "send-status error";
+        return;
+      }
+
+      statusEl.textContent = "✅ " + resp.mensaje;
+      statusEl.className = "send-status ok";
+
+      setTimeout(() => {
+        alert(resp.mensaje + "\n\nMovimientos actualizados: " + resp.movimientos_actualizados);
+        volverAlMenu();
+      }, 800);
+
+    } catch (e) {
+      statusEl.textContent = "❌ " + e.message;
+      statusEl.className = "send-status error";
+    }
+  }
