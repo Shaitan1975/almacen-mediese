@@ -49,10 +49,24 @@
         </button>
       </div>
 
-      <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
+      <div class="menu-botones-lotes hidden" id="menu-botones-lotes">
+        <button id="btn-abrir-lote" class="menu-btn menu-btn-lote">
+          <span class="menu-btn-icono">🆕</span>
+          <span class="menu-btn-texto">ABRIR LOTE</span>
+          <span class="menu-btn-desc">Iniciar lote de trabajo</span>
+        </button>
+
+        <button id="btn-cerrar-lote" class="menu-btn menu-btn-cerrar">
+          <span class="menu-btn-icono">✅</span>
+          <span class="menu-btn-texto">CERRAR LOTE</span>
+          <span class="menu-btn-desc">Terminar lote (con producción)</span>
+        </button>
+      </div>
+
       <button id="btn-ver-stock" class="btn-secondary" style="background: #F0FDF4; color: #15803D; border-color: #BBF7D0;">
         📦 Ver Stock Actual
       </button>
+      <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
       <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
         📊 Dashboard (Supervisor / Gerencia)
       </button>
@@ -92,7 +106,6 @@
         </div>
       </div>
 
-      <!-- Panel de stock actual (aparece al seleccionar insumo) -->
       <div id="info-stock" class="info-stock hidden">
         <span class="info-stock-label">📦 Stock actual:</span>
         <span id="info-stock-valor" class="info-stock-valor">0</span>
@@ -106,6 +119,7 @@
       <div class="input-group" id="grupo-lote-trabajo">
         <label for="lote-trabajo">Lote de trabajo</label>
         <input type="text" id="lote-trabajo" placeholder="Ej: LR7RA-1">
+        <span id="lote-trabajo-status" class="lote-status"></span>
       </div>
 
       <div class="input-group">
@@ -152,11 +166,129 @@
     </div>
   </section>
 
+  <!-- Vista: ABRIR LOTE -->
+  <section id="view-abrir-lote" class="view-section hidden">
+    <div class="form-container">
+      <div class="form-header">
+        <button id="btn-cerrar-abrir-lote" class="btn-cerrar">✖</button>
+        <h2>🆕 Abrir Lote de Trabajo</h2>
+      </div>
+
+      <div class="input-group">
+        <label for="abrir-lote-numero">Número de lote *</label>
+        <input type="text" id="abrir-lote-numero" placeholder="Ej: LR7RA-1" autocomplete="off">
+        <span id="abrir-lote-aviso" class="lote-status"></span>
+      </div>
+
+      <div class="input-group">
+        <label for="abrir-lote-buscar">Buscar código OAR *</label>
+        <input type="text" id="abrir-lote-buscar" placeholder="Ej: RECETA 7, MKN 150, MPS0001">
+        <div id="abrir-lote-resultados" class="resultados-busqueda hidden"></div>
+      </div>
+
+      <div id="abrir-lote-info" class="info-insumo hidden">
+        <div class="info-row">
+          <span class="info-label">Código:</span>
+          <span id="abrir-lote-codigo" class="info-value">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Descripción:</span>
+          <span id="abrir-lote-descripcion" class="info-value">-</span>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label for="abrir-lote-notas">Notas (opcional)</label>
+        <input type="text" id="abrir-lote-notas" placeholder="Ej: Lote de producción del turno matutino">
+      </div>
+
+      <p id="abrir-lote-status" class="send-status"></p>
+
+      <button id="btn-abrir-lote-guardar" class="btn-primary btn-large">
+        ✅ Abrir Lote
+      </button>
+      <button id="btn-cancelar-abrir-lote" class="btn-secondary">
+        Cancelar
+      </button>
+    </div>
+  </section>
+
+  <!-- Vista: CERRAR LOTE -->
+  <section id="view-cerrar-lote" class="view-section hidden">
+    <div class="form-container">
+      <div class="form-header">
+        <button id="btn-cerrar-cerrar-lote" class="btn-cerrar">✖</button>
+        <h2>✅ Cerrar Lote de Trabajo</h2>
+      </div>
+
+      <div class="input-group">
+        <label for="cerrar-lote-seleccionar">Selecciona el lote a cerrar *</label>
+        <select id="cerrar-lote-seleccionar" class="manual-select">
+          <option value="">-- Cargando lotes abiertos... --</option>
+        </select>
+      </div>
+
+      <div id="cerrar-lote-info" class="info-insumo hidden">
+        <div class="info-row">
+          <span class="info-label">Lote:</span>
+          <span id="cerrar-lote-lote" class="info-value">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Código:</span>
+          <span id="cerrar-lote-codigo" class="info-value">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Descripción:</span>
+          <span id="cerrar-lote-descripcion" class="info-value">-</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Unidad:</span>
+          <span id="cerrar-lote-unidad" class="info-value">-</span>
+        </div>
+      </div>
+
+      <div id="cerrar-lote-resumen" class="info-insumo hidden">
+        <div class="info-row">
+          <span class="info-label">Movimientos:</span>
+          <span id="cerrar-lote-total-movs" class="info-value">0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Total consumido:</span>
+          <span id="cerrar-lote-total-consumido" class="info-value">0</span>
+        </div>
+      </div>
+
+      <div class="input-group" id="grupo-cerrar-piezas" style="display:none;">
+        <label for="cerrar-lote-piezas">Piezas producidas *</label>
+        <input type="number" id="cerrar-lote-piezas" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
+      </div>
+
+      <div class="input-group" id="grupo-cerrar-kilos" style="display:none;">
+        <label for="cerrar-lote-kilos">Kilos producidos *</label>
+        <input type="number" id="cerrar-lote-kilos" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
+      </div>
+
+      <div class="input-group">
+        <label for="cerrar-lote-notas">Notas (opcional)</label>
+        <input type="text" id="cerrar-lote-notas" placeholder="Ej: Lote completado sin novedad">
+      </div>
+
+      <p id="cerrar-lote-status" class="send-status"></p>
+
+      <button id="btn-cerrar-lote-guardar" class="btn-primary btn-large">
+        ✅ Cerrar Lote
+      </button>
+      <button id="btn-cancelar-cerrar-lote" class="btn-secondary">
+        Cancelar
+      </button>
+    </div>
+  </section>
+
   <!-- Vista: CONFIRMACIÓN -->
   <section id="view-exito" class="view-section hidden">
     <div class="exito-container">
       <div class="exito-icono">✅</div>
-      <h2 class="exito-titulo">¡Movimiento Registrado!</h2>
+      <h2 class="exito-titulo">¡Registrado!</h2>
       <p id="exito-subtitulo" class="exito-subtitulo">Se guardó correctamente</p>
 
       <div class="exito-detalle">
@@ -198,25 +330,6 @@
     </div>
   </section>
 
-    <!-- Vista: STOCK ACTUAL -->
-  <section id="view-stock" class="view-section hidden">
-    <div class="stock-container">
-      <div class="form-header">
-        <button id="btn-cerrar-stock" class="btn-cerrar">✖</button>
-        <h2>📦 Stock Actual</h2>
-      </div>
-
-      <div class="stock-buscador">
-        <input type="text" id="stock-buscar" placeholder="🔍 Buscar insumo por código o nombre...">
-      </div>
-
-      <div id="stock-resumen" class="stock-resumen"></div>
-
-      <div id="lista-stock" class="lista-stock"></div>
-    </div>
-  </section>
-
-
   <!-- Vista: DASHBOARD -->
   <section id="view-dashboard" class="view-section hidden">
     <div class="dashboard-container">
@@ -232,7 +345,6 @@
           <label for="filtro-fecha">Fecha</label>
           <input type="date" id="filtro-fecha">
         </div>
-
         <div class="input-group">
           <label for="filtro-tipo">Tipo</label>
           <select id="filtro-tipo" class="manual-select">
@@ -242,7 +354,6 @@
             <option value="DEVOLUCION">Devoluciones</option>
           </select>
         </div>
-
         <div class="input-group">
           <label for="filtro-usuario">Usuario</label>
           <select id="filtro-usuario" class="manual-select">
@@ -254,6 +365,23 @@
       <button id="btn-aplicar-filtros" class="btn-primary">🔍 Aplicar filtros</button>
 
       <div id="lista-dashboard" class="lista-movimientos" style="margin-top: 20px;"></div>
+    </div>
+  </section>
+
+  <!-- Vista: STOCK ACTUAL -->
+  <section id="view-stock" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-stock" class="btn-cerrar">✖</button>
+        <h2>📦 Stock Actual</h2>
+      </div>
+
+      <div class="stock-buscador">
+        <input type="text" id="stock-buscar" placeholder="🔍 Buscar insumo por código o nombre...">
+      </div>
+
+      <div id="stock-resumen" class="stock-resumen"></div>
+      <div id="lista-stock" class="lista-stock"></div>
     </div>
   </section>
 
