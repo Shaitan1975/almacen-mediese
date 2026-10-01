@@ -82,12 +82,10 @@
         <h2 id="form-titulo">Registrar Movimiento</h2>
       </div>
 
-      <div class="input-group" id="grupo-lote-insumo">
-        <label for="lote-insumo">Lote del insumo <span class="label-opcional">(PEPS por defecto)</span></label>
-        <select id="lote-insumo" class="manual-select">
-          <option value="">-- Selecciona un insumo primero --</option>
-        </select>
-        <div id="info-lote-insumo" class="info-lote hidden"></div>
+      <div class="input-group">
+        <label for="buscar-insumo">Buscar insumo</label>
+        <input type="text" id="buscar-insumo" placeholder="Escribe código o nombre (ej: HARINA, MPH0009)">
+        <div id="resultados-busqueda" class="resultados-busqueda hidden"></div>
       </div>
 
       <div id="info-insumo" class="info-insumo hidden">
@@ -114,9 +112,12 @@
         <span id="info-stock-valor" class="info-stock-valor">0</span>
       </div>
 
-      <div class="input-group">
-        <label for="lote-insumo">Lote del insumo <span class="label-opcional">(opcional en ENTRADA)</span></label>
-        <input type="text" id="lote-insumo" placeholder="Ej: LMKSI-4">
+      <div class="input-group" id="grupo-lote-insumo">
+        <label for="lote-insumo">Lote del insumo <span class="label-opcional">(PEPS por defecto)</span></label>
+        <select id="lote-insumo" class="manual-select">
+          <option value="">-- Selecciona un insumo primero --</option>
+        </select>
+        <div id="info-lote-insumo" class="info-lote hidden"></div>
       </div>
 
       <div class="input-group" id="grupo-lote-trabajo">
