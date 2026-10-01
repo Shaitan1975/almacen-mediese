@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.0)
-// Login + Registro + Dashboard + Stock en tiempo real
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.1)
+// Login + Registro + Dashboard + Stock + Lotes de Trabajo
 // ═══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -17,6 +17,9 @@ const App = (() => {
   let catalogoCache = null;
   let dcsCache = null;
   let stockCache = null;
+  let loteSeleccionadoAbrir = null;
+  let lotesCache = null;
+  let loteSeleccionadoCerrar = null;
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -143,12 +146,16 @@ const App = (() => {
     document.getElementById("btn-devolucion").addEventListener("click", () => abrirFormulario("DEVOLUCION"));
     document.getElementById("btn-ver-historial").addEventListener("click", verHistorial);
     document.getElementById("btn-ver-stock").addEventListener("click", verStock);
-    // Mostrar botones de lotes solo a supervisor+ 
+
+    // Mostrar botones de lotes solo a supervisor+
     const rolesConLotes = ["supervisor", "gerencia", "admin"];
     if (rolesConLotes.includes(usuarioActual.rol)) {
-      document.getElementById("menu-botones-lotes").classList.remove("hidden");
-      document.getElementById("btn-abrir-lote").addEventListener("click", abrirFormularioAbrirLote);
-      document.getElementById("btn-cerrar-lote").addEventListener("click", abrirFormularioCerrarLote);
+      const menuLotes = document.getElementById("menu-botones-lotes");
+      if (menuLotes) {
+        menuLotes.classList.remove("hidden");
+        document.getElementById("btn-abrir-lote").addEventListener("click", abrirFormularioAbrirLote);
+        document.getElementById("btn-cerrar-lote").addEventListener("click", abrirFormularioCerrarLote);
+      }
     }
 
     // Botón de Dashboard (solo supervisor, gerencia, admin)
@@ -209,19 +216,13 @@ const App = (() => {
   }
 
   function mostrarVista(id) {
-        ["view-menu", "view-form", "view-exito", "view-historial", "view-loading", "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote"]
+    ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
+     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote"]
       .forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add("hidden");
       });
     document.getElementById(id).classList.remove("hidden");
-  }
-
-    // ⬇️ AGREGA ESTA FUNCIÓN ⬇️
-  function volverAlMenu() {
-    insumoSeleccionado = null;
-    tipoMovimientoActual = null;
-    mostrarVista("view-menu");
   }
 
   function volverAlMenu() {
@@ -384,7 +385,6 @@ const App = (() => {
       }
     }
 
-    // Consultar stock actual del insumo
     consultarStockInsumo(insumo.codigo);
   }
 
@@ -409,7 +409,7 @@ const App = (() => {
       return;
     }
 
-        // Validar stock suficiente en SALIDAS
+    // Validar stock suficiente en SALIDAS
     if (tipoMovimientoActual === "SALIDA") {
       const loteInsumo = document.getElementById("lote-insumo").value.trim();
 
@@ -425,7 +425,6 @@ const App = (() => {
           const stockDisponible = Number(respStock.saldo_total) || 0;
           const unidad = insumoSeleccionado.unidad || "";
 
-          // Si se especificó lote, validar solo ese lote
           if (loteInsumo) {
             const loteInfo = respStock.lotes.find(l => l.lote === loteInsumo);
             const stockLote = loteInfo ? Number(loteInfo.saldo) : 0;
@@ -450,7 +449,6 @@ const App = (() => {
               }
             }
           } else {
-            // Sin lote específico, validar stock total
             if (cantidad > stockDisponible) {
               const formateado = stockDisponible.toLocaleString("es-MX");
               statusEl.textContent = "❌ Stock insuficiente. Disponible: " + formateado + " " + unidad;
@@ -472,7 +470,6 @@ const App = (() => {
         }
       } catch (e) {
         console.warn("Error validando stock:", e);
-        // Si falla la validación, dejar continuar (no bloquear)
       }
 
       statusEl.textContent = "⏳ Guardando...";
@@ -509,6 +506,26 @@ const App = (() => {
       const resp = await llamarBackend(url);
 
       if (!resp.ok) {
+        if (resp.lote_cerrado) {
+          const reabrir = confirm(resp.error + "\n\n¿Deseas reactivar el lote?");
+          if (reabrir) {
+            const urlReabrir = CONFIG.APPS_SCRIPT_URL + "?accion=abrir_lote&data=" +
+              encodeURIComponent(JSON.stringify({
+                lote: document.getElementById("lote-trabajo").value.trim(),
+                codigo_oar: insumoSeleccionado.codigo,
+                descripcion: insumoSeleccionado.descripcion,
+                usuario: usuarioActual.user,
+                rol: usuarioActual.rol,
+              }));
+            const respReabrir = await llamarBackend(urlReabrir);
+            if (respReabrir.ok) {
+              alert("✅ Lote reabierto. Vuelve a intentar el registro.");
+            } else {
+              alert("❌ No se pudo reabrir: " + respReabrir.error);
+            }
+          }
+          return;
+        }
         statusEl.textContent = "❌ Error: " + (resp.error || "Desconocido");
         statusEl.className = "send-status error";
         return;
@@ -857,10 +874,7 @@ const App = (() => {
     const panel = document.getElementById("info-stock");
     const valor = document.getElementById("info-stock-valor");
 
-    if (!panel || !valor) {
-      console.warn("Panel de stock no encontrado en el HTML");
-      return;
-    }
+    if (!panel || !valor) return;
 
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=stock_insumo_total&codigo=" + encodeURIComponent(codigo);
@@ -896,19 +910,8 @@ const App = (() => {
 
 
   // ═══════════════════════════════════════════════════════════════
-  // EXPORT
-  // ═══════════════════════════════════════════════════════════════
-
-  return { initLogin, initApp };
-
-})();
-
-  // ═══════════════════════════════════════════════════════════════
   // LOTES DE TRABAJO
   // ═══════════════════════════════════════════════════════════════
-
-  let loteSeleccionadoAbrir = null;
-  let lotesCache = null;
 
   function abrirFormularioAbrirLote() {
     document.getElementById("abrir-lote-numero").value = "";
@@ -1068,12 +1071,6 @@ const App = (() => {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // CERRAR LOTE
-  // ─────────────────────────────────────────────────────────────
-
-  let loteSeleccionadoCerrar = null;
-
   async function abrirFormularioCerrarLote() {
     document.getElementById("cerrar-lote-seleccionar").innerHTML = '<option value="">-- Cargando lotes abiertos... --</option>';
     document.getElementById("cerrar-lote-info").classList.add("hidden");
@@ -1093,7 +1090,6 @@ const App = (() => {
     document.getElementById("cerrar-lote-seleccionar").addEventListener("change", onLoteSeleccionadoCerrar);
     document.getElementById("btn-cerrar-lote-guardar").addEventListener("click", guardarCerrarLote);
 
-    // Cargar lotes abiertos
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes_abiertos";
       const resp = await llamarBackend(url);
@@ -1141,7 +1137,6 @@ const App = (() => {
     document.getElementById("cerrar-lote-unidad").textContent = info.unidad || "KG";
     document.getElementById("cerrar-lote-info").classList.remove("hidden");
 
-    // Mostrar campo según unidad
     if (info.unidad === "PZ") {
       document.getElementById("grupo-cerrar-piezas").style.display = "block";
       document.getElementById("grupo-cerrar-kilos").style.display = "none";
@@ -1150,7 +1145,6 @@ const App = (() => {
       document.getElementById("grupo-cerrar-piezas").style.display = "none";
     }
 
-    // Cargar movimientos del lote
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote);
       const resp = await llamarBackend(url);
@@ -1233,3 +1227,12 @@ const App = (() => {
       statusEl.className = "send-status error";
     }
   }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // EXPORT
+  // ═══════════════════════════════════════════════════════════════
+
+  return { initLogin, initApp };
+
+})();
