@@ -67,6 +67,9 @@
       <button id="btn-ver-stock" class="btn-secondary" style="background: #F0FDF4; color: #15803D; border-color: #BBF7D0;">
         📦 Ver Stock Actual
       </button>
+      <button id="btn-ver-lotes" class="btn-secondary" style="background: #FEF3C7; color: #92400E; border-color: #FDE68A;">
+        📋 Ver Lotes de Trabajo
+      </button>
       <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
       <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
         📊 Dashboard (Supervisor / Gerencia)
@@ -385,6 +388,50 @@
 
       <div id="stock-resumen" class="stock-resumen"></div>
       <div id="lista-stock" class="lista-stock"></div>
+    </div>
+  </section>
+
+  <!-- Vista: LOTES DE TRABAJO -->
+  <section id="view-lotes" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-lotes" class="btn-cerrar">✖</button>
+        <h2>📋 Lotes de Trabajo</h2>
+      </div>
+
+      <div class="stock-buscador">
+        <input type="text" id="lotes-buscar" placeholder="🔍 Buscar por lote, código OAR o descripción...">
+      </div>
+
+      <div class="filtros-container" style="margin-bottom: 15px;">
+        <div class="input-group">
+          <label for="lotes-filtro-status">Estado</label>
+          <select id="lotes-filtro-status" class="manual-select">
+            <option value="TODOS">Todos</option>
+            <option value="ABIERTO">Abiertos</option>
+            <option value="CERRADO">Cerrados</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="lotes-resumen" class="stock-resumen"></div>
+      <div id="lista-lotes" class="lista-stock"></div>
+    </div>
+  </section>
+
+  <!-- Vista: MOVIMIENTOS DE UN LOTE -->
+  <section id="view-lote-movs" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-lote-movs" class="btn-cerrar">✖</button>
+        <h2 id="lote-movs-titulo">📦 Movimientos del Lote</h2>
+      </div>
+
+      <div id="lote-movs-info" class="info-insumo"></div>
+      <div id="lote-movs-resumen" class="stock-resumen" style="margin: 15px 0;"></div>
+      <div id="lista-lote-movs" class="lista-movimientos"></div>
+
+      <button id="btn-volver-lotes" class="btn-secondary" style="margin-top: 20px;">← Volver a lotes</button>
     </div>
   </section>
 
