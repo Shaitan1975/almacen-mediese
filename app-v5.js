@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.3)
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.4)
 // Login + Registro + Dashboard + Stock + Lotes de Trabajo + PEPS
 // ═══════════════════════════════════════════════════════════════════
 
@@ -20,6 +20,7 @@ const App = (() => {
   let loteSeleccionadoAbrir = null;
   let lotesCache = null;
   let loteSeleccionadoCerrar = null;
+  let lotesTodosCache = [];        // ⚠️ NUEVO
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -157,6 +158,7 @@ const App = (() => {
     addEventSafe("btn-devolucion", "click", () => abrirFormulario("DEVOLUCION"));
     addEventSafe("btn-ver-historial", "click", verHistorial);
     addEventSafe("btn-ver-stock", "click", verStock);
+    addEventSafe("btn-ver-lotes", "click", verLotes);        // ⚠️ NUEVO
 
     const rolesConLotes = ["supervisor", "gerencia", "admin"];
     if (rolesConLotes.includes(usuarioActual.rol)) {
@@ -223,7 +225,8 @@ const App = (() => {
 
   function mostrarVista(id) {
     ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
-     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote"]
+     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
+     "view-lotes", "view-lote-movs"]                                    // ⚠️ NUEVO
       .forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add("hidden");
@@ -874,7 +877,8 @@ const App = (() => {
 
       if (!resp.ok) throw new Error("Error al cargar stock");
 
-      stockCache = resp.items;
+      // ⚠️ NUEVO: filtrar solo los que tienen saldo > 0
+      stockCache = (resp.items || []).filter(item => Number(item.saldo) > 0);
 
       document.getElementById("btn-cerrar-stock").addEventListener("click", volverAlMenu);
       document.getElementById("stock-buscar").value = "";
@@ -930,7 +934,7 @@ const App = (() => {
     contenedor.innerHTML = "";
 
     if (items.length === 0) {
-      contenedor.innerHTML = '<div class="stock-vacio">No hay insumos en stock</div>';
+      contenedor.innerHTML = '<div class="stock-vacio">No hay insumos con stock</div>';
       return;
     }
 
@@ -1346,6 +1350,216 @@ const App = (() => {
     } catch (e) {
       statusEl.textContent = e.message;
       statusEl.className = "send-status error";
+    }
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOTES DE TRABAJO - VER TODOS (abiertos y cerrados) ⚠️ NUEVO
+  // ═══════════════════════════════════════════════════════════════
+
+  async function verLotes() {
+    mostrarVista("view-loading");
+    document.getElementById("loading-text").textContent = "Cargando lotes...";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes";
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) throw new Error("Error al cargar lotes");
+
+      lotesTodosCache = resp.lotes || [];
+
+      document.getElementById("btn-cerrar-lotes").addEventListener("click", volverAlMenu);
+      document.getElementById("btn-cerrar-lote-movs").addEventListener("click", () => {
+        mostrarVista("view-lotes");
+      });
+      document.getElementById("btn-volver-lotes").addEventListener("click", () => {
+        mostrarVista("view-lotes");
+      });
+
+      document.getElementById("lotes-buscar").value = "";
+      document.getElementById("lotes-filtro-status").value = "TODOS";
+
+      // Evitar listeners duplicados
+      const inputBuscar = document.getElementById("lotes-buscar");
+      const selectStatus = document.getElementById("lotes-filtro-status");
+
+      inputBuscar.oninput = filtrarLotes;
+      selectStatus.onchange = filtrarLotes;
+
+      renderizarLotes(lotesTodosCache);
+      mostrarVista("view-lotes");
+    } catch (e) {
+      alert("Error al cargar lotes: " + e.message);
+      volverAlMenu();
+    }
+  }
+
+  function filtrarLotes() {
+    const query = document.getElementById("lotes-buscar").value.trim().toUpperCase();
+    const statusFiltro = document.getElementById("lotes-filtro-status").value;
+
+    let filtrados = lotesTodosCache;
+
+    if (statusFiltro !== "TODOS") {
+      filtrados = filtrados.filter(l => l.status === statusFiltro);
+    }
+
+    if (query) {
+      filtrados = filtrados.filter(l =>
+        String(l.lote).toUpperCase().includes(query) ||
+        String(l.codigo_oar).toUpperCase().includes(query) ||
+        String(l.descripcion).toUpperCase().includes(query)
+      );
+    }
+
+    renderizarLotes(filtrados);
+  }
+
+  function renderizarLotes(items) {
+    const contenedor = document.getElementById("lista-lotes");
+    const resumen = document.getElementById("lotes-resumen");
+
+    const total = items.length;
+    const abiertos = items.filter(i => i.status === "ABIERTO").length;
+    const cerrados = items.filter(i => i.status === "CERRADO").length;
+
+    resumen.innerHTML =
+      '<div class="stock-resumen-card">' +
+        '<span class="stock-resumen-numero">' + total + '</span>' +
+        '<span class="stock-resumen-label">Total</span>' +
+      '</div>' +
+      '<div class="stock-resumen-card">' +
+        '<span class="stock-resumen-numero">' + abiertos + '</span>' +
+        '<span class="stock-resumen-label">Abiertos</span>' +
+      '</div>' +
+      '<div class="stock-resumen-card">' +
+        '<span class="stock-resumen-numero">' + cerrados + '</span>' +
+        '<span class="stock-resumen-label">Cerrados</span>' +
+      '</div>';
+
+    contenedor.innerHTML = "";
+
+    if (items.length === 0) {
+      contenedor.innerHTML = '<div class="stock-vacio">No hay lotes que coincidan</div>';
+      return;
+    }
+
+    items.forEach(lote => {
+      const div = document.createElement("div");
+      div.className = "stock-item";
+
+      if (lote.status === "ABIERTO") {
+        div.style.borderLeft = "4px solid #15803D";
+      } else {
+        div.style.borderLeft = "4px solid #9CA3AF";
+      }
+
+      const badge = lote.status === "ABIERTO"
+        ? '<span style="background:#DCFCE7; color:#15803D; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">ABIERTO</span>'
+        : '<span style="background:#F3F4F6; color:#6B7280; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">CERRADO</span>';
+
+      div.innerHTML =
+        '<div class="stock-item-header">' +
+          '<span class="stock-item-codigo">' + lote.lote + '</span>' +
+          badge +
+        '</div>' +
+        '<div class="stock-item-desc">' + lote.codigo_oar + ' - ' + (lote.descripcion || '-') + '</div>' +
+        '<div class="stock-item-info">' +
+          '<span>Apertura: <strong>' + (lote.fecha_apertura || '-') + '</strong> ' + (lote.usuario_apertura || '') + '</span>' +
+        '</div>' +
+        (lote.status === "CERRADO"
+          ? '<div class="stock-item-info"><span>Cierre: <strong>' + (lote.fecha_cierre || '-') + '</strong> ' + (lote.usuario_cierre || '') + '</span></div>'
+          : '') +
+        '<button class="btn-primary" style="margin-top:10px; font-size:13px; padding:8px;" data-lote="' + lote.lote + '">👁 Ver movimientos</button>';
+
+      div.querySelector("button").addEventListener("click", () => verMovimientosDeLote(lote));
+
+      contenedor.appendChild(div);
+    });
+  }
+
+  async function verMovimientosDeLote(lote) {
+    mostrarVista("view-loading");
+    document.getElementById("loading-text").textContent = "Cargando movimientos del lote...";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote.lote);
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) throw new Error("Error al cargar movimientos");
+
+      document.getElementById("lote-movs-titulo").textContent = "📦 Lote: " + lote.lote;
+
+      const infoDiv = document.getElementById("lote-movs-info");
+      const badge = lote.status === "ABIERTO"
+        ? '<span style="background:#DCFCE7; color:#15803D; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">ABIERTO</span>'
+        : '<span style="background:#F3F4F6; color:#6B7280; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">CERRADO</span>';
+
+      infoDiv.innerHTML =
+        '<div class="info-row"><span class="info-label">Lote:</span><span class="info-value">' + lote.lote + ' ' + badge + '</span></div>' +
+        '<div class="info-row"><span class="info-label">Código OAR:</span><span class="info-value">' + lote.codigo_oar + '</span></div>' +
+        '<div class="info-row"><span class="info-label">Descripción:</span><span class="info-value">' + (lote.descripcion || '-') + '</span></div>' +
+        '<div class="info-row"><span class="info-label">Apertura:</span><span class="info-value">' + (lote.fecha_apertura || '-') + ' ' + (lote.usuario_apertura || '') + '</span></div>' +
+        (lote.status === "CERRADO"
+          ? '<div class="info-row"><span class="info-label">Cierre:</span><span class="info-value">' + (lote.fecha_cierre || '-') + ' ' + (lote.usuario_cierre || '') + '</span></div>' +
+            '<div class="info-row"><span class="info-label">Producido:</span><span class="info-value">' +
+              (lote.piezas_producidas || 0) + ' PZ / ' + (lote.kilos_producidos || 0) + ' KG</span></div>'
+          : '');
+
+      const resumenDiv = document.getElementById("lote-movs-resumen");
+      const r = resp.resumen || {};
+      resumenDiv.innerHTML =
+        '<div class="stock-resumen-card">' +
+          '<span class="stock-resumen-numero">' + (resp.total_movimientos || 0) + '</span>' +
+          '<span class="stock-resumen-label">Movimientos</span>' +
+        '</div>' +
+        '<div class="stock-resumen-card">' +
+          '<span class="stock-resumen-numero">' + (r.entradas || 0) + '</span>' +
+          '<span class="stock-resumen-label">Entradas</span>' +
+        '</div>' +
+        '<div class="stock-resumen-card">' +
+          '<span class="stock-resumen-numero">' + (r.salidas || 0) + '</span>' +
+          '<span class="stock-resumen-label">Salidas</span>' +
+        '</div>' +
+        '<div class="stock-resumen-card">' +
+          '<span class="stock-resumen-numero">' + (r.devoluciones || 0) + '</span>' +
+          '<span class="stock-resumen-label">Devoluciones</span>' +
+        '</div>';
+
+      const contenedor = document.getElementById("lista-lote-movs");
+      contenedor.innerHTML = "";
+
+      if (!resp.movimientos || resp.movimientos.length === 0) {
+        contenedor.innerHTML = '<p style="text-align:center; padding:20px; color:#888;">Este lote no tiene movimientos registrados.</p>';
+      } else {
+        resp.movimientos.sort((a, b) => {
+          const fa = String(a.fecha || "") + " " + String(a.hora || "");
+          const fb = String(b.fecha || "") + " " + String(b.hora || "");
+          return fa.localeCompare(fb);
+        });
+
+        resp.movimientos.forEach(m => {
+          const card = document.createElement("div");
+          card.className = "movimiento-card mov-" + String(m.tipo).toLowerCase();
+          card.innerHTML =
+            '<div class="mov-header">' +
+              '<span class="mov-tipo">' + m.tipo + '</span>' +
+              '<span class="mov-hora">' + (m.fecha || '') + ' ' + (m.hora || '') + '</span>' +
+            '</div>' +
+            '<div class="mov-codigo">' + m.codigo + '</div>' +
+            '<div class="mov-desc">' + (m.descripcion || '') + '</div>' +
+            '<div class="mov-cantidad">' + m.cantidad + ' ' + (m.unidad || '') + '</div>' +
+            (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
+          contenedor.appendChild(card);
+        });
+      }
+
+      mostrarVista("view-lote-movs");
+    } catch (e) {
+      alert("Error: " + e.message);
+      mostrarVista("view-lotes");
     }
   }
 
