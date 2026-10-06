@@ -115,12 +115,20 @@
         <span id="info-stock-valor" class="info-stock-valor">0</span>
       </div>
 
-      <div class="input-group" id="grupo-lote-insumo">
+      <!-- ⚠️ LOTE INSUMO: SELECT (para SALIDA / DEVOLUCION) -->
+      <div class="input-group" id="grupo-lote-insumo-select">
         <label for="lote-insumo">Lote del insumo <span class="label-opcional">(PEPS por defecto)</span></label>
         <select id="lote-insumo" class="manual-select">
           <option value="">-- Selecciona un insumo primero --</option>
         </select>
         <div id="info-lote-insumo" class="info-lote hidden"></div>
+      </div>
+
+      <!-- ⚠️ LOTE INSUMO: INPUT (para ENTRADA - lote nuevo) -->
+      <div class="input-group hidden" id="grupo-lote-insumo-input">
+        <label for="lote-insumo-input">Lote nuevo del insumo *</label>
+        <input type="text" id="lote-insumo-input" placeholder="Ej: L-2025-001" autocomplete="off">
+        <span class="label-opcional">Escribe el número de lote que ingresa</span>
       </div>
 
       <div class="input-group" id="grupo-lote-trabajo">
