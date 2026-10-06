@@ -36,13 +36,11 @@
           <span class="menu-btn-texto">ENTRADA</span>
           <span class="menu-btn-desc">Recibo de material</span>
         </button>
-
         <button id="btn-salida" class="menu-btn menu-btn-salida">
           <span class="menu-btn-icono">📤</span>
           <span class="menu-btn-texto">SALIDA</span>
           <span class="menu-btn-desc">Consumo a producción</span>
         </button>
-
         <button id="btn-devolucion" class="menu-btn menu-btn-devolucion">
           <span class="menu-btn-icono">🔄</span>
           <span class="menu-btn-texto">DEVOLUCIÓN</span>
@@ -56,7 +54,6 @@
           <span class="menu-btn-texto">ABRIR LOTE</span>
           <span class="menu-btn-desc">Iniciar lote de trabajo</span>
         </button>
-
         <button id="btn-cerrar-lote" class="menu-btn menu-btn-cerrar">
           <span class="menu-btn-icono">✅</span>
           <span class="menu-btn-texto">CERRAR LOTE</span>
@@ -76,6 +73,9 @@
       <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
       <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
         📊 Dashboard (Supervisor / Gerencia)
+      </button>
+      <button id="btn-reconstruir-stock" class="btn-secondary hidden" style="background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE;">
+        🔄 Reconstruir Stock (Admin)
       </button>
     </div>
   </section>
@@ -166,7 +166,7 @@
       </div>
 
       <p style="font-size:13px; color:#666; margin-bottom:10px;">
-        Busca por código OAR, lote, descripción o ID. La edición cancelará el movimiento original y creará uno nuevo con trazabilidad.
+        Busca por código OAR, lote, descripción o ID. La edición crea una nueva versión con trazabilidad.
       </p>
 
       <div class="stock-buscador">
@@ -175,7 +175,6 @@
       <div class="stock-buscador" style="margin-top:8px;">
         <input type="text" id="editar-movs-buscar-lote" placeholder="🔍 Filtro adicional por lote (opcional)">
       </div>
-
       <button id="btn-buscar-editar-movs" class="btn-primary" style="margin-top:10px;">🔍 Buscar movimientos</button>
 
       <div id="editar-movs-resumen" class="stock-resumen" style="margin-top:15px;"></div>
@@ -190,29 +189,24 @@
         <button id="btn-cerrar-abrir-lote" class="btn-cerrar">✖</button>
         <h2>🆕 Abrir Lote de Trabajo</h2>
       </div>
-
       <div class="input-group">
         <label for="abrir-lote-numero">Número de lote *</label>
         <input type="text" id="abrir-lote-numero" placeholder="Ej: LR7RA-1" autocomplete="off">
         <span id="abrir-lote-aviso" class="lote-status"></span>
       </div>
-
       <div class="input-group">
         <label for="abrir-lote-buscar">Buscar código OAR *</label>
         <input type="text" id="abrir-lote-buscar" placeholder="Ej: RECETA 7, MKN 150, MPS0001">
         <div id="abrir-lote-resultados" class="resultados-busqueda hidden"></div>
       </div>
-
       <div id="abrir-lote-info" class="info-insumo hidden">
         <div class="info-row"><span class="info-label">Código:</span><span id="abrir-lote-codigo" class="info-value">-</span></div>
         <div class="info-row"><span class="info-label">Descripción:</span><span id="abrir-lote-descripcion" class="info-value">-</span></div>
       </div>
-
       <div class="input-group">
         <label for="abrir-lote-notas">Notas (opcional)</label>
         <input type="text" id="abrir-lote-notas" placeholder="Ej: Lote del turno matutino">
       </div>
-
       <p id="abrir-lote-status" class="send-status"></p>
       <button id="btn-abrir-lote-guardar" class="btn-primary btn-large">✅ Abrir Lote</button>
       <button id="btn-cancelar-abrir-lote" class="btn-secondary">Cancelar</button>
@@ -226,40 +220,33 @@
         <button id="btn-cerrar-cerrar-lote" class="btn-cerrar">✖</button>
         <h2>✅ Cerrar Lote de Trabajo</h2>
       </div>
-
       <div class="input-group">
         <label for="cerrar-lote-buscar">Buscar lote a cerrar *</label>
         <input type="text" id="cerrar-lote-buscar" placeholder="Escribe el número de lote (ej: LR7RA-1)">
         <div id="cerrar-lote-resultados" class="resultados-busqueda hidden"></div>
       </div>
-
       <div id="cerrar-lote-info" class="info-insumo hidden">
         <div class="info-row"><span class="info-label">Lote:</span><span id="cerrar-lote-lote" class="info-value">-</span></div>
         <div class="info-row"><span class="info-label">Código:</span><span id="cerrar-lote-codigo" class="info-value">-</span></div>
         <div class="info-row"><span class="info-label">Descripción:</span><span id="cerrar-lote-descripcion" class="info-value">-</span></div>
         <div class="info-row"><span class="info-label">Unidad:</span><span id="cerrar-lote-unidad" class="info-value">-</span></div>
       </div>
-
       <div id="cerrar-lote-resumen" class="info-insumo hidden">
         <div class="info-row"><span class="info-label">Movimientos:</span><span id="cerrar-lote-total-movs" class="info-value">0</span></div>
         <div class="info-row"><span class="info-label">Total consumido:</span><span id="cerrar-lote-total-consumido" class="info-value">0</span></div>
       </div>
-
       <div class="input-group" id="grupo-cerrar-piezas" style="display:none;">
         <label for="cerrar-lote-piezas">Piezas producidas *</label>
         <input type="number" id="cerrar-lote-piezas" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
       </div>
-
       <div class="input-group" id="grupo-cerrar-kilos" style="display:none;">
         <label for="cerrar-lote-kilos">Kilos producidos *</label>
         <input type="number" id="cerrar-lote-kilos" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
       </div>
-
       <div class="input-group">
         <label for="cerrar-lote-notas">Notas (opcional)</label>
         <input type="text" id="cerrar-lote-notas" placeholder="Ej: Lote completado sin novedad">
       </div>
-
       <p id="cerrar-lote-status" class="send-status"></p>
       <button id="btn-cerrar-lote-guardar" class="btn-primary btn-large">✅ Cerrar Lote</button>
       <button id="btn-cancelar-cerrar-lote" class="btn-secondary">Cancelar</button>
@@ -302,9 +289,7 @@
         <button id="btn-cerrar-dashboard" class="btn-cerrar">✖</button>
         <h2>📊 Dashboard de Movimientos</h2>
       </div>
-
       <div id="resumen-dia" class="resumen-grid"></div>
-
       <div class="filtros-container">
         <div class="input-group"><label for="filtro-fecha">Fecha</label><input type="date" id="filtro-fecha"></div>
         <div class="input-group">
@@ -321,7 +306,6 @@
           <select id="filtro-usuario" class="manual-select"><option value="">Todos</option></select>
         </div>
       </div>
-
       <button id="btn-aplicar-filtros" class="btn-primary">🔍 Aplicar filtros</button>
       <div id="lista-dashboard" class="lista-movimientos" style="margin-top: 20px;"></div>
     </div>
@@ -391,48 +375,21 @@
 
       <div id="editar-mov-info-original" class="info-insumo" style="background:#FEF3C7; border-color:#FDE68A; margin-bottom:15px;"></div>
 
-      <div class="input-group">
-        <label for="edit-cantidad">Cantidad *</label>
-        <input type="number" id="edit-cantidad" step="0.01" min="0" inputmode="decimal">
-      </div>
-
-      <div class="input-group">
-        <label for="edit-lote-insumo">Lote insumo</label>
-        <input type="text" id="edit-lote-insumo" autocomplete="off">
-      </div>
-
-      <div class="input-group">
-        <label for="edit-lote-trabajo">Lote de trabajo</label>
-        <input type="text" id="edit-lote-trabajo" autocomplete="off">
-      </div>
-
-      <div class="input-group">
-        <label for="edit-ubicacion">Ubicación</label>
-        <input type="text" id="edit-ubicacion" autocomplete="off">
-      </div>
-
-      <div class="input-group">
-        <label for="edit-proveedor">Proveedor / Cliente</label>
-        <input type="text" id="edit-proveedor" autocomplete="off">
-      </div>
+      <div class="input-group"><label for="edit-cantidad">Cantidad *</label><input type="number" id="edit-cantidad" step="0.01" min="0" inputmode="decimal"></div>
+      <div class="input-group"><label for="edit-lote-insumo">Lote insumo</label><input type="text" id="edit-lote-insumo" autocomplete="off"></div>
+      <div class="input-group"><label for="edit-lote-trabajo">Lote de trabajo</label><input type="text" id="edit-lote-trabajo" autocomplete="off"></div>
+      <div class="input-group"><label for="edit-ubicacion">Ubicación</label><input type="text" id="edit-ubicacion" autocomplete="off"></div>
+      <div class="input-group"><label for="edit-proveedor">Proveedor / Cliente</label><input type="text" id="edit-proveedor" autocomplete="off"></div>
 
       <div class="input-group-row">
         <div class="input-group"><label for="edit-pu">PU ($)</label><input type="number" id="edit-pu" step="0.01" min="0" inputmode="decimal"></div>
         <div class="input-group"><label for="edit-iva">IVA ($)</label><input type="number" id="edit-iva" step="0.01" min="0" inputmode="decimal"></div>
       </div>
 
-      <div class="input-group">
-        <label for="edit-notas">Notas</label>
-        <input type="text" id="edit-notas" autocomplete="off">
-      </div>
-
-      <div class="input-group">
-        <label for="edit-motivo">Motivo de la edición *</label>
-        <input type="text" id="edit-motivo" placeholder="Ej: Cantidad capturada incorrecta" autocomplete="off">
-      </div>
+      <div class="input-group"><label for="edit-notas">Notas</label><input type="text" id="edit-notas" autocomplete="off"></div>
+      <div class="input-group"><label for="edit-motivo">Motivo de la edición *</label><input type="text" id="edit-motivo" placeholder="Ej: Cantidad capturada incorrecta" autocomplete="off"></div>
 
       <p id="edit-status" class="send-status"></p>
-
       <button id="btn-guardar-edicion" class="btn-primary btn-large">✅ Guardar Edición</button>
       <button id="btn-cancelar-edicion" class="btn-secondary">Cancelar</button>
     </div>
