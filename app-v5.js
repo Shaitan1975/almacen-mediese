@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.5)
-// Login + Registro + Dashboard + Stock + Lotes de Trabajo + PEPS
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.6)
+// Login + Registro + Dashboard + Stock + Lotes + PEPS + Edición
 // ═══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -21,7 +21,8 @@ const App = (() => {
   let lotesCache = null;
   let loteSeleccionadoCerrar = null;
   let lotesTodosCache = [];
-
+  let movimientosEditarCache = [];
+  let movimientoEnEdicion = null;
 
   // ═══════════════════════════════════════════════════════════════
   // UTILIDADES
@@ -31,23 +32,13 @@ const App = (() => {
     const s = localStorage.getItem(CONFIG.SESSION_KEY);
     return s ? JSON.parse(s) : null;
   }
-
-  function setSession(d) {
-    localStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(d));
-  }
-
-  function clearSession() {
-    localStorage.removeItem(CONFIG.SESSION_KEY);
-  }
+  function setSession(d) { localStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(d)); }
+  function clearSession() { localStorage.removeItem(CONFIG.SESSION_KEY); }
 
   async function pbkdf2Hash(password, saltHex) {
     const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]
-    );
-    const saltBytes = new Uint8Array(
-      saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16))
-    );
+    const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveBits"]);
+    const saltBytes = new Uint8Array(saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
     const bits = await crypto.subtle.deriveBits(
       { name: "PBKDF2", salt: saltBytes, iterations: CONFIG.ITERACIONES, hash: "SHA-256" },
       keyMaterial, 256
@@ -56,11 +47,7 @@ const App = (() => {
   }
 
   async function llamarBackend(url) {
-    const resp = await fetch(url, {
-      method: "GET",
-      cache: "no-store",
-      redirect: "follow",
-    });
+    const resp = await fetch(url, { method: "GET", cache: "no-store", redirect: "follow" });
     return await resp.json();
   }
 
@@ -69,18 +56,11 @@ const App = (() => {
       const resp = await fetch("usuarios.json?t=" + Date.now(), { cache: "no-store" });
       const usuarios = await resp.json();
       const user = usuarios.find(u => u.user === usuario.toLowerCase().trim());
-
       if (!user) return null;
       if (user.activo === false) return null;
-
       const hashCalc = await pbkdf2Hash(password, user.salt);
       if (hashCalc === user.hash) {
-        return {
-          user: user.user,
-          nombre: user.nombre,
-          rol: user.rol,
-          permisos: user.permisos || [],
-        };
+        return { user: user.user, nombre: user.nombre, rol: user.rol, permisos: user.permisos || [] };
       }
       return null;
     } catch (e) {
@@ -90,11 +70,7 @@ const App = (() => {
   }
 
   function initLogin() {
-    if (getSession()) {
-      window.location.href = "app.html";
-      return;
-    }
-
+    if (getSession()) { window.location.href = "app.html"; return; }
     const form = document.getElementById("login-form");
     const errorMsg = document.getElementById("error-msg");
     const btn = form.querySelector("button");
@@ -104,11 +80,9 @@ const App = (() => {
       errorMsg.textContent = "";
       btn.disabled = true;
       btn.textContent = "Verificando...";
-
       const usuario = document.getElementById("usuario").value;
       const password = document.getElementById("password").value;
       const user = await verificarUsuario(usuario, password);
-
       if (user) {
         setSession(user);
         window.location.href = "app.html";
@@ -120,37 +94,25 @@ const App = (() => {
     });
   }
 
-
   // ═══════════════════════════════════════════════════════════════
   // APP PRINCIPAL
   // ═══════════════════════════════════════════════════════════════
 
   function initApp() {
     usuarioActual = getSession();
-    if (!usuarioActual) {
-      window.location.href = "index.html";
-      return;
-    }
+    if (!usuarioActual) { window.location.href = "index.html"; return; }
 
     const userInfo = document.getElementById("user-info");
-    if (userInfo) {
-      userInfo.textContent = usuarioActual.nombre + " (" + usuarioActual.rol + ")";
-    }
+    if (userInfo) userInfo.textContent = usuarioActual.nombre + " (" + usuarioActual.rol + ")";
 
     function addEventSafe(id, evento, handler) {
       const el = document.getElementById(id);
-      if (el) {
-        el.addEventListener(evento, handler);
-      } else {
-        console.warn("Elemento no encontrado: " + id);
-      }
+      if (el) el.addEventListener(evento, handler);
+      else console.warn("Elemento no encontrado: " + id);
     }
 
     addEventSafe("btn-logout", "click", () => {
-      if (confirm("¿Cerrar sesión?")) {
-        clearSession();
-        window.location.href = "index.html";
-      }
+      if (confirm("¿Cerrar sesión?")) { clearSession(); window.location.href = "index.html"; }
     });
 
     addEventSafe("btn-entrada", "click", () => abrirFormulario("ENTRADA"));
@@ -168,14 +130,25 @@ const App = (() => {
         addEventSafe("btn-abrir-lote", "click", abrirFormularioAbrirLote);
         addEventSafe("btn-cerrar-lote", "click", abrirFormularioCerrarLote);
       }
+      const btnEditar = document.getElementById("btn-editar-movs");
+      if (btnEditar) {
+        btnEditar.classList.remove("hidden");
+        addEventSafe("btn-editar-movs", "click", abrirEditarMovs);
+      }
     }
 
     const rolesConDashboard = ["supervisor", "gerencia", "admin"];
     if (rolesConDashboard.includes(usuarioActual.rol)) {
       const btnDash = document.getElementById("btn-dashboard");
-      if (btnDash) {
-        btnDash.classList.remove("hidden");
-        btnDash.addEventListener("click", abrirDashboard);
+      if (btnDash) { btnDash.classList.remove("hidden"); btnDash.addEventListener("click", abrirDashboard); }
+    }
+
+    // Botón admin: Reconstruir Stock
+    if (usuarioActual.rol === "admin") {
+      const btnRecon = document.getElementById("btn-reconstruir-stock");
+      if (btnRecon) {
+        btnRecon.classList.remove("hidden");
+        btnRecon.addEventListener("click", reconstruirStockManual);
       }
     }
 
@@ -187,50 +160,45 @@ const App = (() => {
     addEventSafe("btn-volver-menu", "click", volverAlMenu);
     addEventSafe("btn-cerrar-historial", "click", volverAlMenu);
 
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
-    }
+    // Modal editar
+    addEventSafe("btn-cerrar-modal-editar", "click", cerrarModalEditar);
+    addEventSafe("btn-cancelar-edicion", "click", cerrarModalEditar);
+    addEventSafe("btn-guardar-edicion", "click", guardarEdicion);
+
+    // Vista editar
+    addEventSafe("btn-cerrar-editar-movs", "click", volverAlMenu);
+    addEventSafe("btn-buscar-editar-movs", "click", buscarMovimientosEditar);
+    addEventSafe("editar-movs-buscar", "input", (e) => {
+      if (e.target.value.length >= 2) buscarMovimientosEditar();
+      else if (e.target.value.length === 0) { movimientosEditarCache = []; renderizarEditarMovs([]); }
+    });
+    addEventSafe("editar-movs-buscar-lote", "input", () => buscarMovimientosEditar());
+
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
     cargarCatalogos();
     mostrarVista("view-menu");
   }
 
   async function cargarCatalogos() {
-    console.log("Cargando catálogos...");
+    try {
+      const cat = await llamarBackend(CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo");
+      if (cat.ok) catalogoCache = cat.insumos;
+    } catch (e) { console.error("Catálogo:", e); }
 
     try {
-      const urlCat = CONFIG.APPS_SCRIPT_URL + "?accion=listar_catalogo";
-      const cat = await llamarBackend(urlCat);
-
-      if (cat.ok) {
-        catalogoCache = cat.insumos;
-        console.log("Catálogo cargado:", catalogoCache.length, "insumos");
-      }
-    } catch (e) {
-      console.error("Error cargando catálogo:", e);
-    }
-
-    try {
-      const urlDcs = CONFIG.APPS_SCRIPT_URL + "?accion=listar_dcs";
-      const dcs = await llamarBackend(urlDcs);
-
-      if (dcs.ok) {
-        dcsCache = dcs.dcs;
-        console.log("DCs cargados:", dcsCache.length);
-      }
-    } catch (e) {
-      console.error("Error cargando DCs:", e);
-    }
+      const dcs = await llamarBackend(CONFIG.APPS_SCRIPT_URL + "?accion=listar_dcs");
+      if (dcs.ok) dcsCache = dcs.dcs;
+    } catch (e) { console.error("DCs:", e); }
   }
 
   function mostrarVista(id) {
     ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
      "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
-     "view-lotes", "view-lote-movs"]
-      .forEach(v => {
-        const el = document.getElementById(v);
-        if (el) el.classList.add("hidden");
-      });
+     "view-lotes", "view-lote-movs", "view-editar-movs"].forEach(v => {
+      const el = document.getElementById(v);
+      if (el) el.classList.add("hidden");
+    });
     document.getElementById(id).classList.remove("hidden");
   }
 
@@ -239,7 +207,6 @@ const App = (() => {
     tipoMovimientoActual = null;
     mostrarVista("view-menu");
   }
-
 
   // ═══════════════════════════════════════════════════════════════
   // FORMULARIO DE MOVIMIENTO
@@ -259,7 +226,6 @@ const App = (() => {
     document.getElementById("info-stock").classList.add("hidden");
     document.getElementById("resultados-busqueda").classList.add("hidden");
 
-    // ⚠️ Manejo del lote insumo según tipo
     const grupoLoteSelect = document.getElementById("grupo-lote-insumo-select");
     const grupoLoteInput = document.getElementById("grupo-lote-insumo-input");
     const selectLote = document.getElementById("lote-insumo");
@@ -267,14 +233,12 @@ const App = (() => {
     const infoLotePanel = document.getElementById("info-lote-insumo");
 
     if (tipo === "ENTRADA") {
-      // ENTRADA → input de texto libre (lote nuevo)
       if (grupoLoteSelect) grupoLoteSelect.classList.add("hidden");
       if (grupoLoteInput) grupoLoteInput.classList.remove("hidden");
       if (inputLote) inputLote.value = "";
       if (selectLote) selectLote.innerHTML = '<option value="">-- No aplica --</option>';
       if (infoLotePanel) infoLotePanel.classList.add("hidden");
     } else {
-      // SALIDA / DEVOLUCION → select de lotes existentes
       if (grupoLoteSelect) grupoLoteSelect.classList.remove("hidden");
       if (grupoLoteInput) grupoLoteInput.classList.add("hidden");
       if (selectLote) {
@@ -357,10 +321,7 @@ const App = (() => {
     const query = document.getElementById("buscar-insumo").value.trim().toUpperCase();
     const resultados = document.getElementById("resultados-busqueda");
 
-    if (query.length < 2) {
-      resultados.classList.add("hidden");
-      return;
-    }
+    if (query.length < 2) { resultados.classList.add("hidden"); return; }
 
     if (!catalogoCache || catalogoCache.length === 0) {
       resultados.innerHTML = '<div class="resultado-vacio">Catálogo cargando...</div>';
@@ -408,9 +369,7 @@ const App = (() => {
 
     document.getElementById("label-unidad").textContent = "(" + insumo.unidad + ")";
 
-    if (insumo.proveedor) {
-      document.getElementById("proveedor").value = insumo.proveedor;
-    }
+    if (insumo.proveedor) document.getElementById("proveedor").value = insumo.proveedor;
 
     const selectUbic = document.getElementById("ubicacion");
     for (let i = 0; i < selectUbic.options.length; i++) {
@@ -422,12 +381,10 @@ const App = (() => {
 
     consultarStockInsumo(insumo.codigo);
 
-    // ⚠️ Solo cargar lotes si NO es ENTRADA
     if (tipoMovimientoActual !== "ENTRADA") {
       cargarLotesDisponibles(insumo.codigo);
     }
   }
-
 
   // ═══════════════════════════════════════════════════════════════
   // LOTES DISPONIBLES (PEPS)
@@ -436,7 +393,6 @@ const App = (() => {
   async function cargarLotesDisponibles(codigo) {
     const select = document.getElementById("lote-insumo");
     const infoPanel = document.getElementById("info-lote-insumo");
-
     if (!select) return;
 
     select.innerHTML = '<option value="">-- Cargando lotes... --</option>';
@@ -471,7 +427,6 @@ const App = (() => {
         select.selectedIndex = 1;
         onLoteInsumoChange();
       }
-
     } catch (e) {
       console.error("Error cargando lotes:", e);
       select.innerHTML = '<option value="">-- Error al cargar --</option>';
@@ -510,7 +465,6 @@ const App = (() => {
     }
   }
 
-
   // ═══════════════════════════════════════════════════════════════
   // GUARDAR MOVIMIENTO
   // ═══════════════════════════════════════════════════════════════
@@ -531,12 +485,10 @@ const App = (() => {
       return;
     }
 
-    // ⚠️ Leer lote insumo según el tipo de movimiento
     let loteInsumo = "";
     if (tipoMovimientoActual === "ENTRADA") {
       const inputLote = document.getElementById("lote-insumo-input");
       loteInsumo = inputLote ? inputLote.value.trim() : "";
-
       if (!loteInsumo) {
         statusEl.textContent = "Escribe el lote del insumo que ingresa";
         statusEl.className = "send-status error";
@@ -567,8 +519,7 @@ const App = (() => {
             if (cantidad > stockLote) {
               const formateado = stockLote.toLocaleString("es-MX");
               statusEl.textContent = "Stock insuficiente en lote " + loteInsumo +
-                ". Disponible: " + formateado + " " + unidad +
-                " | Solicitado: " + cantidad + " " + unidad;
+                ". Disponible: " + formateado + " " + unidad;
               statusEl.className = "send-status error";
 
               const continuar = confirm(
@@ -578,7 +529,6 @@ const App = (() => {
                 "Solicitado: " + cantidad + " " + unidad + "\n\n" +
                 "¿Deseas continuar de todos modos?"
               );
-
               if (!continuar) return;
             }
           } else {
@@ -594,7 +544,6 @@ const App = (() => {
                 "Solicitado: " + cantidad + " " + unidad + "\n\n" +
                 "¿Deseas continuar de todos modos?"
               );
-
               if (!continuar) return;
             }
           }
@@ -602,9 +551,6 @@ const App = (() => {
       } catch (e) {
         console.warn("Error validando stock:", e);
       }
-
-      statusEl.textContent = "Guardando...";
-      statusEl.className = "send-status";
     }
 
     statusEl.textContent = "Guardando...";
@@ -649,11 +595,8 @@ const App = (() => {
                 rol: usuarioActual.rol,
               }));
             const respReabrir = await llamarBackend(urlReabrir);
-            if (respReabrir.ok) {
-              alert("Lote reabierto. Vuelve a intentar el registro.");
-            } else {
-              alert("No se pudo reabrir: " + respReabrir.error);
-            }
+            if (respReabrir.ok) alert("Lote reabierto. Vuelve a intentar el registro.");
+            else alert("No se pudo reabrir: " + respReabrir.error);
           }
           return;
         }
@@ -663,7 +606,6 @@ const App = (() => {
       }
 
       mostrarExito(resp, cantidad);
-
     } catch (e) {
       statusEl.textContent = "Error: " + e.message;
       statusEl.className = "send-status error";
@@ -676,10 +618,8 @@ const App = (() => {
     document.getElementById("exito-insumo").textContent = insumoSeleccionado.codigo + " - " + insumoSeleccionado.descripcion;
     document.getElementById("exito-cantidad").textContent = cantidad + " " + insumoSeleccionado.unidad;
     document.getElementById("exito-fecha").textContent = (resp.fecha || "") + " " + (resp.hora || "");
-
     mostrarVista("view-exito");
   }
-
 
   // ═══════════════════════════════════════════════════════════════
   // HISTORIAL
@@ -692,9 +632,7 @@ const App = (() => {
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_hoy&usuario=" + encodeURIComponent(usuarioActual.user);
       const resp = await llamarBackend(url);
-
       if (!resp.ok) throw new Error("Error al cargar");
-
       mostrarListaMovimientos(resp.movimientos);
     } catch (e) {
       alert("Error: " + e.message);
@@ -731,7 +669,6 @@ const App = (() => {
     mostrarVista("view-historial");
   }
 
-
   // ═══════════════════════════════════════════════════════════════
   // DASHBOARD
   // ═══════════════════════════════════════════════════════════════
@@ -747,7 +684,6 @@ const App = (() => {
 
     cargarResumen();
     cargarMovimientosDashboard();
-
     mostrarVista("view-dashboard");
   }
 
@@ -755,33 +691,16 @@ const App = (() => {
     try {
       const fecha = document.getElementById("filtro-fecha").value;
       const fechaFormato = formatearFecha(fecha);
-
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=resumen_dia&fecha=" + encodeURIComponent(fechaFormato);
       const resp = await llamarBackend(url);
-
       if (!resp.ok) throw new Error("Error al cargar resumen");
 
-      const contenedor = document.getElementById("resumen-dia");
-      contenedor.innerHTML =
-        '<div class="resumen-card entrada">' +
-          '<span class="resumen-numero">' + resp.total_entradas + '</span>' +
-          '<span class="resumen-label">Entradas</span>' +
-        '</div>' +
-        '<div class="resumen-card salida">' +
-          '<span class="resumen-numero">' + resp.total_salidas + '</span>' +
-          '<span class="resumen-label">Salidas</span>' +
-        '</div>' +
-        '<div class="resumen-card devolucion">' +
-          '<span class="resumen-numero">' + resp.total_devoluciones + '</span>' +
-          '<span class="resumen-label">Devoluciones</span>' +
-        '</div>' +
-        '<div class="resumen-card total">' +
-          '<span class="resumen-numero">' + resp.total_movimientos + '</span>' +
-          '<span class="resumen-label">Total</span>' +
-        '</div>';
-    } catch (e) {
-      console.error("Error en resumen:", e);
-    }
+      document.getElementById("resumen-dia").innerHTML =
+        '<div class="resumen-card entrada"><span class="resumen-numero">' + resp.total_entradas + '</span><span class="resumen-label">Entradas</span></div>' +
+        '<div class="resumen-card salida"><span class="resumen-numero">' + resp.total_salidas + '</span><span class="resumen-label">Salidas</span></div>' +
+        '<div class="resumen-card devolucion"><span class="resumen-numero">' + resp.total_devoluciones + '</span><span class="resumen-label">Devoluciones</span></div>' +
+        '<div class="resumen-card total"><span class="resumen-numero">' + resp.total_movimientos + '</span><span class="resumen-label">Total</span></div>';
+    } catch (e) { console.error("Error en resumen:", e); }
   }
 
   async function cargarMovimientosDashboard() {
@@ -800,7 +719,6 @@ const App = (() => {
 
       const resp = await llamarBackend(url);
       if (!resp.ok) throw new Error("Error al cargar movimientos");
-
       mostrarMovimientosDashboard(resp.movimientos);
     } catch (e) {
       contenedor.innerHTML = '<p style="color:red; text-align:center;">Error: ' + e.message + '</p>';
@@ -824,10 +742,7 @@ const App = (() => {
       if (m.estado === "CANCELADO") card.style.opacity = "0.5";
 
       card.innerHTML =
-        '<div class="mov-header">' +
-          '<span class="mov-tipo">' + m.tipo + '</span>' +
-          '<span class="mov-hora">' + m.hora + '</span>' +
-        '</div>' +
+        '<div class="mov-header"><span class="mov-tipo">' + m.tipo + '</span><span class="mov-hora">' + m.hora + '</span></div>' +
         '<div class="mov-codigo">' + m.codigo + '</div>' +
         '<div class="mov-desc">' + m.descripcion + '</div>' +
         '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
@@ -836,6 +751,36 @@ const App = (() => {
         (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
 
       if (m.estado !== "CANCELADO") {
+        const btnCorregir = document.createElement("button");
+        btnCorregir.className = "btn-primary";
+        btnCorregir.style.cssText = "margin-top:10px; margin-right:6px; font-size:12px; padding:6px 10px; background:#F59E0B; border-color:#F59E0B;";
+        btnCorregir.textContent = "✏️ Corregir";
+        btnCorregir.addEventListener("click", () => {
+          abrirModalEditar({
+            id: m.id,
+            tipo: m.tipo,
+            codigo_oar: m.codigo,
+            descripcion: m.descripcion,
+            cantidad: m.cantidad,
+            unidad: m.unidad,
+            lote_insumo: m.lote_insumo || "",
+            lote_trabajo: m.lote_trabajo || "",
+            ubicacion: m.ubicacion || "",
+            proveedor_cliente: m.proveedor || "",
+            pu: m.pu || 0,
+            iva: m.iva || 0,
+            notas: m.notas || "",
+            fecha: m.fecha,
+            hora: m.hora,
+            usuario: m.usuario,
+            nombre_usuario: m.nombre_usuario,
+            rol: m.rol,
+            estado: m.estado,
+            editable: true,
+          });
+        });
+        card.appendChild(btnCorregir);
+
         const btnCancelar = document.createElement("button");
         btnCancelar.className = "btn-cancelar-mov";
         btnCancelar.textContent = "Cancelar";
@@ -849,12 +794,8 @@ const App = (() => {
 
   async function cancelarMovimientoDash(mov) {
     const motivo = prompt("Motivo de la cancelación:\n\n(" + mov.codigo + " - " + mov.cantidad + " " + mov.unidad + ")");
-
     if (motivo === null) return;
-    if (!motivo.trim()) {
-      alert("Debes ingresar un motivo");
-      return;
-    }
+    if (!motivo.trim()) { alert("Debes ingresar un motivo"); return; }
 
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=cancelar_movimiento_dashboard&data=" +
@@ -866,31 +807,21 @@ const App = (() => {
         }));
 
       const resp = await llamarBackend(url);
-
-      if (!resp.ok) {
-        alert("Error: " + (resp.error || "Desconocido"));
-        return;
-      }
+      if (!resp.ok) { alert("Error: " + (resp.error || "Desconocido")); return; }
 
       alert("Movimiento cancelado");
       cargarMovimientosDashboard();
       cargarResumen();
-    } catch (e) {
-      alert("Error: " + e.message);
-    }
+    } catch (e) { alert("Error: " + e.message); }
   }
 
-  function cargarDashboard() {
-    cargarResumen();
-    cargarMovimientosDashboard();
-  }
+  function cargarDashboard() { cargarResumen(); cargarMovimientosDashboard(); }
 
   function formatearFecha(fechaISO) {
     if (!fechaISO) return "";
     const partes = fechaISO.split("-");
     return partes[2] + "/" + partes[1] + "/" + partes[0];
   }
-
 
   // ═══════════════════════════════════════════════════════════════
   // STOCK ACTUAL
@@ -903,7 +834,6 @@ const App = (() => {
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_stock";
       const resp = await llamarBackend(url);
-
       if (!resp.ok) throw new Error("Error al cargar stock");
 
       stockCache = (resp.items || []).filter(item => Number(item.saldo) > 0);
@@ -922,18 +852,13 @@ const App = (() => {
 
   function filtrarStock() {
     const query = document.getElementById("stock-buscar").value.trim().toUpperCase();
-
-    if (!query) {
-      renderizarStock(stockCache);
-      return;
-    }
+    if (!query) { renderizarStock(stockCache); return; }
 
     const filtrados = stockCache.filter(item =>
       String(item.codigo).toUpperCase().includes(query) ||
       String(item.descripcion).toUpperCase().includes(query) ||
       String(item.lote).toUpperCase().includes(query)
     );
-
     renderizarStock(filtrados);
   }
 
@@ -946,18 +871,9 @@ const App = (() => {
     const totalSaldoCero = items.filter(i => i.saldo === 0).length;
 
     resumen.innerHTML =
-      '<div class="stock-resumen-card">' +
-        '<span class="stock-resumen-numero">' + totalItems + '</span>' +
-        '<span class="stock-resumen-label">Insumos / Lotes</span>' +
-      '</div>' +
-      '<div class="stock-resumen-card">' +
-        '<span class="stock-resumen-numero">' + totalSaldoPositivo + '</span>' +
-        '<span class="stock-resumen-label">Con Stock</span>' +
-      '</div>' +
-      '<div class="stock-resumen-card">' +
-        '<span class="stock-resumen-numero">' + totalSaldoCero + '</span>' +
-        '<span class="stock-resumen-label">Sin Stock</span>' +
-      '</div>';
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + totalItems + '</span><span class="stock-resumen-label">Insumos / Lotes</span></div>' +
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + totalSaldoPositivo + '</span><span class="stock-resumen-label">Con Stock</span></div>' +
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + totalSaldoCero + '</span><span class="stock-resumen-label">Sin Stock</span></div>';
 
     contenedor.innerHTML = "";
 
@@ -975,15 +891,11 @@ const App = (() => {
       const div = document.createElement("div");
       div.className = "stock-item";
 
-      if (item.saldo === 0) {
-        div.classList.add("stock-cero");
-      } else if (item.saldo < 100) {
-        div.classList.add("stock-bajo");
-      }
+      if (item.saldo === 0) div.classList.add("stock-cero");
+      else if (item.saldo < 100) div.classList.add("stock-bajo");
 
       const saldoFormateado = Number(item.saldo).toLocaleString("es-MX", {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
+        minimumFractionDigits: 0, maximumFractionDigits: 2
       });
 
       div.innerHTML =
@@ -1004,7 +916,6 @@ const App = (() => {
   async function consultarStockInsumo(codigo) {
     const panel = document.getElementById("info-stock");
     const valor = document.getElementById("info-stock-valor");
-
     if (!panel || !valor) return;
 
     try {
@@ -1014,10 +925,7 @@ const App = (() => {
       if (resp.ok) {
         const total = Number(resp.saldo_total) || 0;
         const unidad = insumoSeleccionado && insumoSeleccionado.unidad ? insumoSeleccionado.unidad : "";
-        const formateado = total.toLocaleString("es-MX", {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2
-        });
+        const formateado = total.toLocaleString("es-MX", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
         valor.textContent = formateado + " " + unidad;
         panel.classList.remove("hidden");
@@ -1039,9 +947,236 @@ const App = (() => {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ⚠️ EDITAR MOVIMIENTOS
+  // ═══════════════════════════════════════════════════════════════
+
+  function abrirEditarMovs() {
+    document.getElementById("editar-movs-buscar").value = "";
+    document.getElementById("editar-movs-buscar-lote").value = "";
+    document.getElementById("editar-movs-resumen").innerHTML = "";
+    document.getElementById("lista-editar-movs").innerHTML = "";
+    movimientosEditarCache = [];
+
+    mostrarVista("view-editar-movs");
+    setTimeout(() => document.getElementById("editar-movs-buscar").focus(), 100);
+  }
+
+  async function buscarMovimientosEditar() {
+    const codigo = document.getElementById("editar-movs-buscar").value.trim();
+    const lote = document.getElementById("editar-movs-buscar-lote").value.trim();
+
+    if (!codigo && !lote) {
+      movimientosEditarCache = [];
+      renderizarEditarMovs([]);
+      return;
+    }
+
+    const lista = document.getElementById("lista-editar-movs");
+    lista.innerHTML = '<p style="text-align:center; padding:20px;">Buscando...</p>';
+
+    try {
+      let url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_movs_insumo";
+      if (codigo) url += "&codigo=" + encodeURIComponent(codigo);
+      if (lote) url += "&lote=" + encodeURIComponent(lote);
+
+      const resp = await llamarBackend(url);
+      if (!resp.ok) throw new Error(resp.error || "Error");
+
+      movimientosEditarCache = resp.movimientos || [];
+      renderizarEditarMovs(movimientosEditarCache);
+    } catch (e) {
+      lista.innerHTML = '<p style="color:red; text-align:center;">Error: ' + e.message + '</p>';
+    }
+  }
+
+  function renderizarEditarMovs(movs) {
+    const contenedor = document.getElementById("lista-editar-movs");
+    const resumen = document.getElementById("editar-movs-resumen");
+
+    const total = movs.length;
+    const activos = movs.filter(m => m.estado !== "CANCELADO").length;
+    const cancelados = movs.filter(m => m.estado === "CANCELADO").length;
+
+    resumen.innerHTML =
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + total + '</span><span class="stock-resumen-label">Total</span></div>' +
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + activos + '</span><span class="stock-resumen-label">Activos</span></div>' +
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + cancelados + '</span><span class="stock-resumen-label">Cancelados</span></div>';
+
+    contenedor.innerHTML = "";
+
+    if (movs.length === 0) {
+      contenedor.innerHTML = '<p style="text-align:center; padding:20px; color:#888;">Escribe algo para buscar movimientos.</p>';
+      return;
+    }
+
+    movs.forEach(m => {
+      const card = document.createElement("div");
+      card.className = "movimiento-card mov-" + String(m.tipo).toLowerCase();
+      if (m.estado === "CANCELADO") card.style.opacity = "0.5";
+
+      card.innerHTML =
+        '<div class="mov-header">' +
+          '<span class="mov-tipo">' + m.tipo + '</span>' +
+          '<span class="mov-hora">' + m.fecha + ' ' + m.hora + '</span>' +
+        '</div>' +
+        '<div class="mov-codigo">' + m.codigo_oar + ' <small style="color:#888;">(' + m.id + ')</small></div>' +
+        '<div class="mov-desc">' + (m.descripcion || '-') + '</div>' +
+        '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
+        '<div class="mov-usuario">Lote insumo: <strong>' + (m.lote_insumo || 'SIN_LOTE') + '</strong></div>' +
+        (m.lote_trabajo ? '<div class="mov-usuario">Lote trabajo: ' + m.lote_trabajo + '</div>' : '') +
+        '<div class="mov-usuario">Registró: ' + (m.nombre_usuario || m.usuario) + ' (' + m.rol + ')</div>' +
+        (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
+
+      if (m.editable) {
+        const btn = document.createElement("button");
+        btn.className = "btn-primary";
+        btn.style.cssText = "margin-top:10px; font-size:13px; padding:8px; background:#F59E0B; border-color:#F59E0B;";
+        btn.textContent = "✏️ Editar";
+        btn.addEventListener("click", () => abrirModalEditar(m));
+        card.appendChild(btn);
+      } else {
+        const info = document.createElement("div");
+        info.style.cssText = "margin-top:10px; font-size:12px; color:#888;";
+        info.textContent = "No editable (cancelado)";
+        card.appendChild(info);
+      }
+
+      contenedor.appendChild(card);
+    });
+  }
+
+  function abrirModalEditar(mov) {
+    movimientoEnEdicion = mov;
+
+    document.getElementById("editar-mov-info-original").innerHTML =
+      '<div class="info-row"><span class="info-label">ID:</span><span class="info-value">' + mov.id + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Tipo:</span><span class="info-value">' + mov.tipo + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Código OAR:</span><span class="info-value">' + mov.codigo_oar + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Descripción:</span><span class="info-value">' + (mov.descripcion || '-') + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Unidad:</span><span class="info-value">' + mov.unidad + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Fecha original:</span><span class="info-value">' + mov.fecha + ' ' + mov.hora + '</span></div>';
+
+    document.getElementById("edit-cantidad").value = mov.cantidad;
+    document.getElementById("edit-lote-insumo").value = mov.lote_insumo || "";
+    document.getElementById("edit-lote-trabajo").value = mov.lote_trabajo || "";
+    document.getElementById("edit-ubicacion").value = mov.ubicacion || "";
+    document.getElementById("edit-proveedor").value = mov.proveedor_cliente || "";
+    document.getElementById("edit-pu").value = mov.pu || 0;
+    document.getElementById("edit-iva").value = mov.iva || 0;
+    document.getElementById("edit-notas").value = mov.notas || "";
+    document.getElementById("edit-motivo").value = "";
+
+    document.getElementById("edit-status").textContent = "";
+    document.getElementById("edit-status").className = "send-status";
+
+    document.getElementById("modal-editar-mov").classList.remove("hidden");
+  }
+
+  function cerrarModalEditar() {
+    movimientoEnEdicion = null;
+    document.getElementById("modal-editar-mov").classList.add("hidden");
+  }
+
+  async function guardarEdicion() {
+    if (!movimientoEnEdicion) return;
+
+    const statusEl = document.getElementById("edit-status");
+    const cantidad = parseFloat(document.getElementById("edit-cantidad").value);
+    const motivo = document.getElementById("edit-motivo").value.trim();
+
+    if (!cantidad || cantidad <= 0) {
+      statusEl.textContent = "Cantidad inválida";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    if (!motivo) {
+      statusEl.textContent = "Escribe el motivo de la edición";
+      statusEl.className = "send-status error";
+      return;
+    }
+
+    statusEl.textContent = "Guardando edición...";
+    statusEl.className = "send-status";
+
+    const payload = {
+      accion: "editar_movimiento",
+      id_movimiento: movimientoEnEdicion.id,
+      motivo: motivo,
+      cantidad: cantidad,
+      lote_insumo: document.getElementById("edit-lote-insumo").value.trim(),
+      lote_trabajo: document.getElementById("edit-lote-trabajo").value.trim(),
+      ubicacion: document.getElementById("edit-ubicacion").value.trim(),
+      proveedor_cliente: document.getElementById("edit-proveedor").value.trim(),
+      pu: parseFloat(document.getElementById("edit-pu").value) || 0,
+      iva: parseFloat(document.getElementById("edit-iva").value) || 0,
+      notas: document.getElementById("edit-notas").value.trim(),
+      usuario: usuarioActual.user,
+      rol: usuarioActual.rol,
+    };
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=editar_movimiento&data=" +
+        encodeURIComponent(JSON.stringify(payload));
+
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        statusEl.textContent = "Error: " + (resp.error || "Desconocido");
+        statusEl.className = "send-status error";
+        return;
+      }
+
+      statusEl.textContent = "✅ " + resp.mensaje + " (" + resp.id_original + " → " + resp.id_nuevo + ")";
+      statusEl.className = "send-status ok";
+
+      setTimeout(() => {
+        cerrarModalEditar();
+        if (!document.getElementById("view-editar-movs").classList.contains("hidden")) {
+          buscarMovimientosEditar();
+        }
+        if (!document.getElementById("view-dashboard").classList.contains("hidden")) {
+          cargarMovimientosDashboard();
+        }
+      }, 1200);
+    } catch (e) {
+      statusEl.textContent = "Error: " + e.message;
+      statusEl.className = "send-status error";
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════
-  // LOTES DE TRABAJO
+  // RECONSTRUIR STOCK (ADMIN)
+  // ═══════════════════════════════════════════════════════════════
+
+  async function reconstruirStockManual() {
+    if (usuarioActual.rol !== "admin") return;
+    if (!confirm("¿Reconstruir el stock desde los movimientos?\n\nEsto recalcula STOCK_ACTUAL desde cero. Puede tardar unos segundos.")) return;
+
+    mostrarVista("view-loading");
+    document.getElementById("loading-text").textContent = "Reconstruyendo stock...";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=reconstruir_stock";
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        alert("Error: " + (resp.error || "Desconocido"));
+        volverAlMenu();
+        return;
+      }
+
+      alert("✅ " + (resp.mensaje || "Stock reconstruido"));
+      volverAlMenu();
+    } catch (e) {
+      alert("Error: " + e.message);
+      volverAlMenu();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ABRIR LOTE
   // ═══════════════════════════════════════════════════════════════
 
   function abrirFormularioAbrirLote() {
@@ -1071,11 +1206,7 @@ const App = (() => {
     const lote = document.getElementById("abrir-lote-numero").value.trim();
     const aviso = document.getElementById("abrir-lote-aviso");
 
-    if (lote.length < 2) {
-      aviso.textContent = "";
-      aviso.className = "lote-status";
-      return;
-    }
+    if (lote.length < 2) { aviso.textContent = ""; aviso.className = "lote-status"; return; }
 
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=validar_lote&lote=" + encodeURIComponent(lote);
@@ -1093,19 +1224,14 @@ const App = (() => {
         aviso.textContent = "Lote disponible";
         aviso.className = "lote-status ok";
       }
-    } catch (e) {
-      aviso.textContent = "";
-    }
+    } catch (e) { aviso.textContent = ""; }
   }
 
   function buscarInsumoAbrirLote() {
     const query = document.getElementById("abrir-lote-buscar").value.trim().toUpperCase();
     const resultados = document.getElementById("abrir-lote-resultados");
 
-    if (query.length < 2) {
-      resultados.classList.add("hidden");
-      return;
-    }
+    if (query.length < 2) { resultados.classList.add("hidden"); return; }
 
     if (!catalogoCache || catalogoCache.length === 0) {
       resultados.innerHTML = '<div class="resultado-vacio">Catálogo cargando...</div>';
@@ -1141,10 +1267,8 @@ const App = (() => {
 
   function seleccionarInsumoAbrirLote(insumo) {
     loteSeleccionadoAbrir = insumo;
-
     document.getElementById("abrir-lote-buscar").value = insumo.codigo + " - " + insumo.descripcion;
     document.getElementById("abrir-lote-resultados").classList.add("hidden");
-
     document.getElementById("abrir-lote-codigo").textContent = insumo.codigo;
     document.getElementById("abrir-lote-descripcion").textContent = insumo.descripcion;
     document.getElementById("abrir-lote-info").classList.remove("hidden");
@@ -1154,17 +1278,8 @@ const App = (() => {
     const lote = document.getElementById("abrir-lote-numero").value.trim();
     const statusEl = document.getElementById("abrir-lote-status");
 
-    if (!lote) {
-      statusEl.textContent = "Escribe el número de lote";
-      statusEl.className = "send-status error";
-      return;
-    }
-
-    if (!loteSeleccionadoAbrir) {
-      statusEl.textContent = "Selecciona un código OAR";
-      statusEl.className = "send-status error";
-      return;
-    }
+    if (!lote) { statusEl.textContent = "Escribe el número de lote"; statusEl.className = "send-status error"; return; }
+    if (!loteSeleccionadoAbrir) { statusEl.textContent = "Selecciona un código OAR"; statusEl.className = "send-status error"; return; }
 
     statusEl.textContent = "Abriendo lote...";
     statusEl.className = "send-status";
@@ -1191,16 +1306,16 @@ const App = (() => {
       statusEl.textContent = resp.mensaje;
       statusEl.className = "send-status ok";
 
-      setTimeout(() => {
-        alert(resp.mensaje);
-        volverAlMenu();
-      }, 800);
-
+      setTimeout(() => { alert(resp.mensaje); volverAlMenu(); }, 800);
     } catch (e) {
       statusEl.textContent = e.message;
       statusEl.className = "send-status error";
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CERRAR LOTE
+  // ═══════════════════════════════════════════════════════════════
 
   async function abrirFormularioCerrarLote() {
     document.getElementById("cerrar-lote-buscar").value = "";
@@ -1225,13 +1340,10 @@ const App = (() => {
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes_abiertos";
       const resp = await llamarBackend(url);
-
       if (resp.ok && resp.lotes.length > 0) {
         lotesCache = resp.lotes;
-        console.log("Lotes abiertos cargados:", lotesCache.length);
       } else {
         lotesCache = [];
-        console.warn("No hay lotes abiertos");
       }
     } catch (e) {
       lotesCache = [];
@@ -1246,10 +1358,7 @@ const App = (() => {
     const query = document.getElementById("cerrar-lote-buscar").value.trim().toUpperCase();
     const resultados = document.getElementById("cerrar-lote-resultados");
 
-    if (query.length < 1) {
-      resultados.classList.add("hidden");
-      return;
-    }
+    if (query.length < 1) { resultados.classList.add("hidden"); return; }
 
     if (!lotesCache || lotesCache.length === 0) {
       resultados.innerHTML = '<div class="resultado-vacio">No hay lotes abiertos</div>';
@@ -1289,7 +1398,6 @@ const App = (() => {
 
     document.getElementById("cerrar-lote-buscar").value = lote.lote + " - " + lote.descripcion;
     document.getElementById("cerrar-lote-resultados").classList.add("hidden");
-
     document.getElementById("cerrar-lote-lote").textContent = lote.lote;
     document.getElementById("cerrar-lote-codigo").textContent = lote.codigo_oar;
     document.getElementById("cerrar-lote-descripcion").textContent = lote.descripcion;
@@ -1314,36 +1422,21 @@ const App = (() => {
           (resp.resumen.total_unidades || 0).toLocaleString("es-MX") + " " + (lote.unidad || "");
         document.getElementById("cerrar-lote-resumen").classList.remove("hidden");
       }
-    } catch (e) {
-      console.error("Error al cargar movimientos del lote:", e);
-    }
+    } catch (e) { console.error("Error al cargar movimientos del lote:", e); }
   }
 
   async function guardarCerrarLote() {
     const lote = loteSeleccionadoCerrar ? loteSeleccionadoCerrar.lote : "";
     const statusEl = document.getElementById("cerrar-lote-status");
 
-    if (!lote) {
-      statusEl.textContent = "Busca y selecciona un lote";
-      statusEl.className = "send-status error";
-      return;
-    }
+    if (!lote) { statusEl.textContent = "Busca y selecciona un lote"; statusEl.className = "send-status error"; return; }
 
     const unidad = loteSeleccionadoCerrar.unidad || "KG";
     const piezas = parseFloat(document.getElementById("cerrar-lote-piezas").value) || 0;
     const kilos = parseFloat(document.getElementById("cerrar-lote-kilos").value) || 0;
 
-    if (unidad === "PZ" && piezas <= 0) {
-      statusEl.textContent = "Ingresa las piezas producidas";
-      statusEl.className = "send-status error";
-      return;
-    }
-
-    if (unidad === "KG" && kilos <= 0) {
-      statusEl.textContent = "Ingresa los kilos producidos";
-      statusEl.className = "send-status error";
-      return;
-    }
+    if (unidad === "PZ" && piezas <= 0) { statusEl.textContent = "Ingresa las piezas producidas"; statusEl.className = "send-status error"; return; }
+    if (unidad === "KG" && kilos <= 0) { statusEl.textContent = "Ingresa los kilos producidos"; statusEl.className = "send-status error"; return; }
 
     statusEl.textContent = "Cerrando lote...";
     statusEl.className = "send-status";
@@ -1374,16 +1467,14 @@ const App = (() => {
         alert(resp.mensaje + "\n\nMovimientos actualizados: " + resp.movimientos_actualizados);
         volverAlMenu();
       }, 800);
-
     } catch (e) {
       statusEl.textContent = e.message;
       statusEl.className = "send-status error";
     }
   }
 
-
   // ═══════════════════════════════════════════════════════════════
-  // LOTES DE TRABAJO - VER TODOS (abiertos y cerrados)
+  // VER LOTES
   // ═══════════════════════════════════════════════════════════════
 
   async function verLotes() {
@@ -1393,25 +1484,19 @@ const App = (() => {
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=listar_lotes";
       const resp = await llamarBackend(url);
-
       if (!resp.ok) throw new Error("Error al cargar lotes");
 
       lotesTodosCache = resp.lotes || [];
 
       document.getElementById("btn-cerrar-lotes").addEventListener("click", volverAlMenu);
-      document.getElementById("btn-cerrar-lote-movs").addEventListener("click", () => {
-        mostrarVista("view-lotes");
-      });
-      document.getElementById("btn-volver-lotes").addEventListener("click", () => {
-        mostrarVista("view-lotes");
-      });
+      document.getElementById("btn-cerrar-lote-movs").addEventListener("click", () => mostrarVista("view-lotes"));
+      document.getElementById("btn-volver-lotes").addEventListener("click", () => mostrarVista("view-lotes"));
 
       document.getElementById("lotes-buscar").value = "";
       document.getElementById("lotes-filtro-status").value = "TODOS";
 
       const inputBuscar = document.getElementById("lotes-buscar");
       const selectStatus = document.getElementById("lotes-filtro-status");
-
       inputBuscar.oninput = filtrarLotes;
       selectStatus.onchange = filtrarLotes;
 
@@ -1453,18 +1538,9 @@ const App = (() => {
     const cerrados = items.filter(i => i.status === "CERRADO").length;
 
     resumen.innerHTML =
-      '<div class="stock-resumen-card">' +
-        '<span class="stock-resumen-numero">' + total + '</span>' +
-        '<span class="stock-resumen-label">Total</span>' +
-      '</div>' +
-      '<div class="stock-resumen-card">' +
-        '<span class="stock-resumen-numero">' + abiertos + '</span>' +
-        '<span class="stock-resumen-label">Abiertos</span>' +
-      '</div>' +
-      '<div class="stock-resumen-card">' +
-        '<span class="stock-resumen-numero">' + cerrados + '</span>' +
-        '<span class="stock-resumen-label">Cerrados</span>' +
-      '</div>';
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + total + '</span><span class="stock-resumen-label">Total</span></div>' +
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + abiertos + '</span><span class="stock-resumen-label">Abiertos</span></div>' +
+      '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + cerrados + '</span><span class="stock-resumen-label">Cerrados</span></div>';
 
     contenedor.innerHTML = "";
 
@@ -1477,11 +1553,7 @@ const App = (() => {
       const div = document.createElement("div");
       div.className = "stock-item";
 
-      if (lote.status === "ABIERTO") {
-        div.style.borderLeft = "4px solid #15803D";
-      } else {
-        div.style.borderLeft = "4px solid #9CA3AF";
-      }
+      div.style.borderLeft = lote.status === "ABIERTO" ? "4px solid #15803D" : "4px solid #9CA3AF";
 
       const badge = lote.status === "ABIERTO"
         ? '<span style="background:#DCFCE7; color:#15803D; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:bold;">ABIERTO</span>'
@@ -1493,16 +1565,13 @@ const App = (() => {
           badge +
         '</div>' +
         '<div class="stock-item-desc">' + lote.codigo_oar + ' - ' + (lote.descripcion || '-') + '</div>' +
-        '<div class="stock-item-info">' +
-          '<span>Apertura: <strong>' + (lote.fecha_apertura || '-') + '</strong> ' + (lote.usuario_apertura || '') + '</span>' +
-        '</div>' +
+        '<div class="stock-item-info"><span>Apertura: <strong>' + (lote.fecha_apertura || '-') + '</strong> ' + (lote.usuario_apertura || '') + '</span></div>' +
         (lote.status === "CERRADO"
           ? '<div class="stock-item-info"><span>Cierre: <strong>' + (lote.fecha_cierre || '-') + '</strong> ' + (lote.usuario_cierre || '') + '</span></div>'
           : '') +
-        '<button class="btn-primary" style="margin-top:10px; font-size:13px; padding:8px;" data-lote="' + lote.lote + '">👁 Ver movimientos</button>';
+        '<button class="btn-primary" style="margin-top:10px; font-size:13px; padding:8px;">👁 Ver movimientos</button>';
 
       div.querySelector("button").addEventListener("click", () => verMovimientosDeLote(lote));
-
       contenedor.appendChild(div);
     });
   }
@@ -1514,7 +1583,6 @@ const App = (() => {
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote.lote);
       const resp = await llamarBackend(url);
-
       if (!resp.ok) throw new Error("Error al cargar movimientos");
 
       document.getElementById("lote-movs-titulo").textContent = "📦 Lote: " + lote.lote;
@@ -1531,29 +1599,16 @@ const App = (() => {
         '<div class="info-row"><span class="info-label">Apertura:</span><span class="info-value">' + (lote.fecha_apertura || '-') + ' ' + (lote.usuario_apertura || '') + '</span></div>' +
         (lote.status === "CERRADO"
           ? '<div class="info-row"><span class="info-label">Cierre:</span><span class="info-value">' + (lote.fecha_cierre || '-') + ' ' + (lote.usuario_cierre || '') + '</span></div>' +
-            '<div class="info-row"><span class="info-label">Producido:</span><span class="info-value">' +
-              (lote.piezas_producidas || 0) + ' PZ / ' + (lote.kilos_producidos || 0) + ' KG</span></div>'
+            '<div class="info-row"><span class="info-label">Producido:</span><span class="info-value">' + (lote.piezas_producidas || 0) + ' PZ / ' + (lote.kilos_producidos || 0) + ' KG</span></div>'
           : '');
 
       const resumenDiv = document.getElementById("lote-movs-resumen");
       const r = resp.resumen || {};
       resumenDiv.innerHTML =
-        '<div class="stock-resumen-card">' +
-          '<span class="stock-resumen-numero">' + (resp.total_movimientos || 0) + '</span>' +
-          '<span class="stock-resumen-label">Movimientos</span>' +
-        '</div>' +
-        '<div class="stock-resumen-card">' +
-          '<span class="stock-resumen-numero">' + (r.entradas || 0) + '</span>' +
-          '<span class="stock-resumen-label">Entradas</span>' +
-        '</div>' +
-        '<div class="stock-resumen-card">' +
-          '<span class="stock-resumen-numero">' + (r.salidas || 0) + '</span>' +
-          '<span class="stock-resumen-label">Salidas</span>' +
-        '</div>' +
-        '<div class="stock-resumen-card">' +
-          '<span class="stock-resumen-numero">' + (r.devoluciones || 0) + '</span>' +
-          '<span class="stock-resumen-label">Devoluciones</span>' +
-        '</div>';
+        '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + (resp.total_movimientos || 0) + '</span><span class="stock-resumen-label">Movimientos</span></div>' +
+        '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + (r.entradas || 0) + '</span><span class="stock-resumen-label">Entradas</span></div>' +
+        '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + (r.salidas || 0) + '</span><span class="stock-resumen-label">Salidas</span></div>' +
+        '<div class="stock-resumen-card"><span class="stock-resumen-numero">' + (r.devoluciones || 0) + '</span><span class="stock-resumen-label">Devoluciones</span></div>';
 
       const contenedor = document.getElementById("lista-lote-movs");
       contenedor.innerHTML = "";
@@ -1571,15 +1626,12 @@ const App = (() => {
           const card = document.createElement("div");
           card.className = "movimiento-card mov-" + String(m.tipo).toLowerCase();
           card.innerHTML =
-            '<div class="mov-header">' +
-              '<span class="mov-tipo">' + m.tipo + '</span>' +
-              '<span class="mov-hora">' + (m.fecha || '') + ' ' + (m.hora || '') + '</span>' +
-            '</div>' +
+            '<div class="mov-header"><span class="mov-tipo">' + m.tipo + '</span><span class="mov-hora">' + (m.fecha || '') + ' ' + (m.hora || '') + '</span></div>' +
             '<div class="mov-codigo">' + m.codigo + '</div>' +
             '<div class="mov-desc">' + (m.descripcion || '') + '</div>' +
             '<div class="mov-cantidad">' + m.cantidad + ' ' + (m.unidad || '') + '</div>' +
             (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
-          contenedor.appendChild(m.card || card);
+          contenedor.appendChild(card);
         });
       }
 
@@ -1589,7 +1641,6 @@ const App = (() => {
       mostrarVista("view-lotes");
     }
   }
-
 
   // ═══════════════════════════════════════════════════════════════
   // EXPORT
