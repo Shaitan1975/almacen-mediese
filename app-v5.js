@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.4)
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.5)
 // Login + Registro + Dashboard + Stock + Lotes de Trabajo + PEPS
 // ═══════════════════════════════════════════════════════════════════
 
@@ -20,7 +20,7 @@ const App = (() => {
   let loteSeleccionadoAbrir = null;
   let lotesCache = null;
   let loteSeleccionadoCerrar = null;
-  let lotesTodosCache = [];        // ⚠️ NUEVO
+  let lotesTodosCache = [];
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -158,7 +158,7 @@ const App = (() => {
     addEventSafe("btn-devolucion", "click", () => abrirFormulario("DEVOLUCION"));
     addEventSafe("btn-ver-historial", "click", verHistorial);
     addEventSafe("btn-ver-stock", "click", verStock);
-    addEventSafe("btn-ver-lotes", "click", verLotes);        // ⚠️ NUEVO
+    addEventSafe("btn-ver-lotes", "click", verLotes);
 
     const rolesConLotes = ["supervisor", "gerencia", "admin"];
     if (rolesConLotes.includes(usuarioActual.rol)) {
@@ -226,7 +226,7 @@ const App = (() => {
   function mostrarVista(id) {
     ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
      "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
-     "view-lotes", "view-lote-movs"]                                    // ⚠️ NUEVO
+     "view-lotes", "view-lote-movs"]
       .forEach(v => {
         const el = document.getElementById(v);
         if (el) el.classList.add("hidden");
@@ -259,19 +259,31 @@ const App = (() => {
     document.getElementById("info-stock").classList.add("hidden");
     document.getElementById("resultados-busqueda").classList.add("hidden");
 
+    // ⚠️ Manejo del lote insumo según tipo
+    const grupoLoteSelect = document.getElementById("grupo-lote-insumo-select");
+    const grupoLoteInput = document.getElementById("grupo-lote-insumo-input");
     const selectLote = document.getElementById("lote-insumo");
-    if (selectLote) {
-      if (selectLote.tagName === "SELECT") {
+    const inputLote = document.getElementById("lote-insumo-input");
+    const infoLotePanel = document.getElementById("info-lote-insumo");
+
+    if (tipo === "ENTRADA") {
+      // ENTRADA → input de texto libre (lote nuevo)
+      if (grupoLoteSelect) grupoLoteSelect.classList.add("hidden");
+      if (grupoLoteInput) grupoLoteInput.classList.remove("hidden");
+      if (inputLote) inputLote.value = "";
+      if (selectLote) selectLote.innerHTML = '<option value="">-- No aplica --</option>';
+      if (infoLotePanel) infoLotePanel.classList.add("hidden");
+    } else {
+      // SALIDA / DEVOLUCION → select de lotes existentes
+      if (grupoLoteSelect) grupoLoteSelect.classList.remove("hidden");
+      if (grupoLoteInput) grupoLoteInput.classList.add("hidden");
+      if (selectLote) {
         selectLote.innerHTML = '<option value="">-- Selecciona un insumo primero --</option>';
         selectLote.removeEventListener("change", onLoteInsumoChange);
         selectLote.addEventListener("change", onLoteInsumoChange);
-      } else {
-        selectLote.value = "";
       }
+      if (infoLotePanel) infoLotePanel.classList.add("hidden");
     }
-
-    const infoLotePanel = document.getElementById("info-lote-insumo");
-    if (infoLotePanel) infoLotePanel.classList.add("hidden");
 
     document.getElementById("lote-trabajo").value = "";
     document.getElementById("cantidad").value = "";
@@ -409,7 +421,11 @@ const App = (() => {
     }
 
     consultarStockInsumo(insumo.codigo);
-    cargarLotesDisponibles(insumo.codigo);
+
+    // ⚠️ Solo cargar lotes si NO es ENTRADA
+    if (tipoMovimientoActual !== "ENTRADA") {
+      cargarLotesDisponibles(insumo.codigo);
+    }
   }
 
 
@@ -515,8 +531,21 @@ const App = (() => {
       return;
     }
 
-    const loteInsumoSelect = document.getElementById("lote-insumo");
-    const loteInsumo = loteInsumoSelect ? loteInsumoSelect.value : "";
+    // ⚠️ Leer lote insumo según el tipo de movimiento
+    let loteInsumo = "";
+    if (tipoMovimientoActual === "ENTRADA") {
+      const inputLote = document.getElementById("lote-insumo-input");
+      loteInsumo = inputLote ? inputLote.value.trim() : "";
+
+      if (!loteInsumo) {
+        statusEl.textContent = "Escribe el lote del insumo que ingresa";
+        statusEl.className = "send-status error";
+        return;
+      }
+    } else {
+      const selectLote = document.getElementById("lote-insumo");
+      loteInsumo = selectLote ? selectLote.value : "";
+    }
 
     if (tipoMovimientoActual === "SALIDA") {
       statusEl.textContent = "Validando stock...";
@@ -877,7 +906,6 @@ const App = (() => {
 
       if (!resp.ok) throw new Error("Error al cargar stock");
 
-      // ⚠️ NUEVO: filtrar solo los que tienen saldo > 0
       stockCache = (resp.items || []).filter(item => Number(item.saldo) > 0);
 
       document.getElementById("btn-cerrar-stock").addEventListener("click", volverAlMenu);
@@ -1355,7 +1383,7 @@ const App = (() => {
 
 
   // ═══════════════════════════════════════════════════════════════
-  // LOTES DE TRABAJO - VER TODOS (abiertos y cerrados) ⚠️ NUEVO
+  // LOTES DE TRABAJO - VER TODOS (abiertos y cerrados)
   // ═══════════════════════════════════════════════════════════════
 
   async function verLotes() {
@@ -1381,7 +1409,6 @@ const App = (() => {
       document.getElementById("lotes-buscar").value = "";
       document.getElementById("lotes-filtro-status").value = "TODOS";
 
-      // Evitar listeners duplicados
       const inputBuscar = document.getElementById("lotes-buscar");
       const selectStatus = document.getElementById("lotes-filtro-status");
 
@@ -1552,7 +1579,7 @@ const App = (() => {
             '<div class="mov-desc">' + (m.descripcion || '') + '</div>' +
             '<div class="mov-cantidad">' + m.cantidad + ' ' + (m.unidad || '') + '</div>' +
             (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
-          contenedor.appendChild(card);
+          contenedor.appendChild(m.card || card);
         });
       }
 
