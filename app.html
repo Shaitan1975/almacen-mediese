@@ -70,6 +70,9 @@
       <button id="btn-ver-lotes" class="btn-secondary" style="background: #FEF3C7; color: #92400E; border-color: #FDE68A;">
         📋 Ver Lotes de Trabajo
       </button>
+      <button id="btn-editar-movs" class="btn-secondary hidden" style="background: #FEF2F2; color: #991B1B; border-color: #FECACA;">
+        ✏️ Editar Movimientos
+      </button>
       <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
       <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
         📊 Dashboard (Supervisor / Gerencia)
@@ -92,22 +95,10 @@
       </div>
 
       <div id="info-insumo" class="info-insumo hidden">
-        <div class="info-row">
-          <span class="info-label">Código:</span>
-          <span id="info-codigo" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Descripción:</span>
-          <span id="info-descripcion" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Unidad:</span>
-          <span id="info-unidad" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Categoría:</span>
-          <span id="info-categoria" class="info-value">-</span>
-        </div>
+        <div class="info-row"><span class="info-label">Código:</span><span id="info-codigo" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Descripción:</span><span id="info-descripcion" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Unidad:</span><span id="info-unidad" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Categoría:</span><span id="info-categoria" class="info-value">-</span></div>
       </div>
 
       <div id="info-stock" class="info-stock hidden">
@@ -115,7 +106,6 @@
         <span id="info-stock-valor" class="info-stock-valor">0</span>
       </div>
 
-      <!-- ⚠️ LOTE INSUMO: SELECT (para SALIDA / DEVOLUCION) -->
       <div class="input-group" id="grupo-lote-insumo-select">
         <label for="lote-insumo">Lote del insumo <span class="label-opcional">(PEPS por defecto)</span></label>
         <select id="lote-insumo" class="manual-select">
@@ -124,7 +114,6 @@
         <div id="info-lote-insumo" class="info-lote hidden"></div>
       </div>
 
-      <!-- ⚠️ LOTE INSUMO: INPUT (para ENTRADA - lote nuevo) -->
       <div class="input-group hidden" id="grupo-lote-insumo-input">
         <label for="lote-insumo-input">Lote nuevo del insumo *</label>
         <input type="text" id="lote-insumo-input" placeholder="Ej: L-2025-001" autocomplete="off">
@@ -144,9 +133,7 @@
 
       <div class="input-group" id="grupo-ubicacion">
         <label for="ubicacion">Ubicación / DC destino</label>
-        <select id="ubicacion" class="manual-select">
-          <option value="">-- Selecciona --</option>
-        </select>
+        <select id="ubicacion" class="manual-select"><option value="">-- Selecciona --</option></select>
       </div>
 
       <div class="input-group" id="grupo-proveedor">
@@ -155,14 +142,8 @@
       </div>
 
       <div class="input-group-row">
-        <div class="input-group">
-          <label for="pu">PU ($)</label>
-          <input type="number" id="pu" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
-        </div>
-        <div class="input-group">
-          <label for="iva">IVA ($)</label>
-          <input type="number" id="iva" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
-        </div>
+        <div class="input-group"><label for="pu">PU ($)</label><input type="number" id="pu" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>
+        <div class="input-group"><label for="iva">IVA ($)</label><input type="number" id="iva" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>
       </div>
 
       <div class="input-group">
@@ -171,13 +152,34 @@
       </div>
 
       <p id="registro-status" class="send-status"></p>
+      <button id="btn-guardar" class="btn-primary btn-large">✅ Guardar Movimiento</button>
+      <button id="btn-cancelar-form" class="btn-secondary">Cancelar</button>
+    </div>
+  </section>
 
-      <button id="btn-guardar" class="btn-primary btn-large">
-        ✅ Guardar Movimiento
-      </button>
-      <button id="btn-cancelar-form" class="btn-secondary">
-        Cancelar
-      </button>
+  <!-- Vista: EDITAR MOVIMIENTOS -->
+  <section id="view-editar-movs" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-editar-movs" class="btn-cerrar">✖</button>
+        <h2>✏️ Editar Movimientos</h2>
+      </div>
+
+      <p style="font-size:13px; color:#666; margin-bottom:10px;">
+        Busca por código OAR, lote, descripción o ID. La edición cancelará el movimiento original y creará uno nuevo con trazabilidad.
+      </p>
+
+      <div class="stock-buscador">
+        <input type="text" id="editar-movs-buscar" placeholder="🔍 Código OAR, lote, descripción o ID...">
+      </div>
+      <div class="stock-buscador" style="margin-top:8px;">
+        <input type="text" id="editar-movs-buscar-lote" placeholder="🔍 Filtro adicional por lote (opcional)">
+      </div>
+
+      <button id="btn-buscar-editar-movs" class="btn-primary" style="margin-top:10px;">🔍 Buscar movimientos</button>
+
+      <div id="editar-movs-resumen" class="stock-resumen" style="margin-top:15px;"></div>
+      <div id="lista-editar-movs" class="lista-movimientos"></div>
     </div>
   </section>
 
@@ -202,29 +204,18 @@
       </div>
 
       <div id="abrir-lote-info" class="info-insumo hidden">
-        <div class="info-row">
-          <span class="info-label">Código:</span>
-          <span id="abrir-lote-codigo" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Descripción:</span>
-          <span id="abrir-lote-descripcion" class="info-value">-</span>
-        </div>
+        <div class="info-row"><span class="info-label">Código:</span><span id="abrir-lote-codigo" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Descripción:</span><span id="abrir-lote-descripcion" class="info-value">-</span></div>
       </div>
 
       <div class="input-group">
         <label for="abrir-lote-notas">Notas (opcional)</label>
-        <input type="text" id="abrir-lote-notas" placeholder="Ej: Lote de producción del turno matutino">
+        <input type="text" id="abrir-lote-notas" placeholder="Ej: Lote del turno matutino">
       </div>
 
       <p id="abrir-lote-status" class="send-status"></p>
-
-      <button id="btn-abrir-lote-guardar" class="btn-primary btn-large">
-        ✅ Abrir Lote
-      </button>
-      <button id="btn-cancelar-abrir-lote" class="btn-secondary">
-        Cancelar
-      </button>
+      <button id="btn-abrir-lote-guardar" class="btn-primary btn-large">✅ Abrir Lote</button>
+      <button id="btn-cancelar-abrir-lote" class="btn-secondary">Cancelar</button>
     </div>
   </section>
 
@@ -243,33 +234,15 @@
       </div>
 
       <div id="cerrar-lote-info" class="info-insumo hidden">
-        <div class="info-row">
-          <span class="info-label">Lote:</span>
-          <span id="cerrar-lote-lote" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Código:</span>
-          <span id="cerrar-lote-codigo" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Descripción:</span>
-          <span id="cerrar-lote-descripcion" class="info-value">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Unidad:</span>
-          <span id="cerrar-lote-unidad" class="info-value">-</span>
-        </div>
+        <div class="info-row"><span class="info-label">Lote:</span><span id="cerrar-lote-lote" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Código:</span><span id="cerrar-lote-codigo" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Descripción:</span><span id="cerrar-lote-descripcion" class="info-value">-</span></div>
+        <div class="info-row"><span class="info-label">Unidad:</span><span id="cerrar-lote-unidad" class="info-value">-</span></div>
       </div>
 
       <div id="cerrar-lote-resumen" class="info-insumo hidden">
-        <div class="info-row">
-          <span class="info-label">Movimientos:</span>
-          <span id="cerrar-lote-total-movs" class="info-value">0</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Total consumido:</span>
-          <span id="cerrar-lote-total-consumido" class="info-value">0</span>
-        </div>
+        <div class="info-row"><span class="info-label">Movimientos:</span><span id="cerrar-lote-total-movs" class="info-value">0</span></div>
+        <div class="info-row"><span class="info-label">Total consumido:</span><span id="cerrar-lote-total-consumido" class="info-value">0</span></div>
       </div>
 
       <div class="input-group" id="grupo-cerrar-piezas" style="display:none;">
@@ -288,13 +261,8 @@
       </div>
 
       <p id="cerrar-lote-status" class="send-status"></p>
-
-      <button id="btn-cerrar-lote-guardar" class="btn-primary btn-large">
-        ✅ Cerrar Lote
-      </button>
-      <button id="btn-cancelar-cerrar-lote" class="btn-secondary">
-        Cancelar
-      </button>
+      <button id="btn-cerrar-lote-guardar" class="btn-primary btn-large">✅ Cerrar Lote</button>
+      <button id="btn-cancelar-cerrar-lote" class="btn-secondary">Cancelar</button>
     </div>
   </section>
 
@@ -304,30 +272,13 @@
       <div class="exito-icono">✅</div>
       <h2 class="exito-titulo">¡Registrado!</h2>
       <p id="exito-subtitulo" class="exito-subtitulo">Se guardó correctamente</p>
-
       <div class="exito-detalle">
-        <div class="exito-fila">
-          <span>ID:</span>
-          <strong id="exito-id">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Tipo:</span>
-          <strong id="exito-tipo">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Insumo:</span>
-          <strong id="exito-insumo">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Cantidad:</span>
-          <strong id="exito-cantidad">-</strong>
-        </div>
-        <div class="exito-fila">
-          <span>Fecha/Hora:</span>
-          <strong id="exito-fecha">-</strong>
-        </div>
+        <div class="exito-fila"><span>ID:</span><strong id="exito-id">-</strong></div>
+        <div class="exito-fila"><span>Tipo:</span><strong id="exito-tipo">-</strong></div>
+        <div class="exito-fila"><span>Insumo:</span><strong id="exito-insumo">-</strong></div>
+        <div class="exito-fila"><span>Cantidad:</span><strong id="exito-cantidad">-</strong></div>
+        <div class="exito-fila"><span>Fecha/Hora:</span><strong id="exito-fecha">-</strong></div>
       </div>
-
       <button id="btn-registrar-otro" class="btn-primary btn-large">🔄 Registrar otro</button>
       <button id="btn-volver-menu" class="btn-secondary">Volver al menú</button>
     </div>
@@ -355,10 +306,7 @@
       <div id="resumen-dia" class="resumen-grid"></div>
 
       <div class="filtros-container">
-        <div class="input-group">
-          <label for="filtro-fecha">Fecha</label>
-          <input type="date" id="filtro-fecha">
-        </div>
+        <div class="input-group"><label for="filtro-fecha">Fecha</label><input type="date" id="filtro-fecha"></div>
         <div class="input-group">
           <label for="filtro-tipo">Tipo</label>
           <select id="filtro-tipo" class="manual-select">
@@ -370,14 +318,11 @@
         </div>
         <div class="input-group">
           <label for="filtro-usuario">Usuario</label>
-          <select id="filtro-usuario" class="manual-select">
-            <option value="">Todos</option>
-          </select>
+          <select id="filtro-usuario" class="manual-select"><option value="">Todos</option></select>
         </div>
       </div>
 
       <button id="btn-aplicar-filtros" class="btn-primary">🔍 Aplicar filtros</button>
-
       <div id="lista-dashboard" class="lista-movimientos" style="margin-top: 20px;"></div>
     </div>
   </section>
@@ -389,11 +334,9 @@
         <button id="btn-cerrar-stock" class="btn-cerrar">✖</button>
         <h2>📦 Stock Actual</h2>
       </div>
-
       <div class="stock-buscador">
         <input type="text" id="stock-buscar" placeholder="🔍 Buscar insumo por código o nombre...">
       </div>
-
       <div id="stock-resumen" class="stock-resumen"></div>
       <div id="lista-stock" class="lista-stock"></div>
     </div>
@@ -406,11 +349,9 @@
         <button id="btn-cerrar-lotes" class="btn-cerrar">✖</button>
         <h2>📋 Lotes de Trabajo</h2>
       </div>
-
       <div class="stock-buscador">
         <input type="text" id="lotes-buscar" placeholder="🔍 Buscar por lote, código OAR o descripción...">
       </div>
-
       <div class="filtros-container" style="margin-bottom: 15px;">
         <div class="input-group">
           <label for="lotes-filtro-status">Estado</label>
@@ -421,7 +362,6 @@
           </select>
         </div>
       </div>
-
       <div id="lotes-resumen" class="stock-resumen"></div>
       <div id="lista-lotes" class="lista-stock"></div>
     </div>
@@ -434,14 +374,69 @@
         <button id="btn-cerrar-lote-movs" class="btn-cerrar">✖</button>
         <h2 id="lote-movs-titulo">📦 Movimientos del Lote</h2>
       </div>
-
       <div id="lote-movs-info" class="info-insumo"></div>
       <div id="lote-movs-resumen" class="stock-resumen" style="margin: 15px 0;"></div>
       <div id="lista-lote-movs" class="lista-movimientos"></div>
-
       <button id="btn-volver-lotes" class="btn-secondary" style="margin-top: 20px;">← Volver a lotes</button>
     </div>
   </section>
+
+  <!-- MODAL: EDITAR MOVIMIENTO -->
+  <div id="modal-editar-mov" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="form-header">
+        <button id="btn-cerrar-modal-editar" class="btn-cerrar">✖</button>
+        <h2>✏️ Editar Movimiento</h2>
+      </div>
+
+      <div id="editar-mov-info-original" class="info-insumo" style="background:#FEF3C7; border-color:#FDE68A; margin-bottom:15px;"></div>
+
+      <div class="input-group">
+        <label for="edit-cantidad">Cantidad *</label>
+        <input type="number" id="edit-cantidad" step="0.01" min="0" inputmode="decimal">
+      </div>
+
+      <div class="input-group">
+        <label for="edit-lote-insumo">Lote insumo</label>
+        <input type="text" id="edit-lote-insumo" autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label for="edit-lote-trabajo">Lote de trabajo</label>
+        <input type="text" id="edit-lote-trabajo" autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label for="edit-ubicacion">Ubicación</label>
+        <input type="text" id="edit-ubicacion" autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label for="edit-proveedor">Proveedor / Cliente</label>
+        <input type="text" id="edit-proveedor" autocomplete="off">
+      </div>
+
+      <div class="input-group-row">
+        <div class="input-group"><label for="edit-pu">PU ($)</label><input type="number" id="edit-pu" step="0.01" min="0" inputmode="decimal"></div>
+        <div class="input-group"><label for="edit-iva">IVA ($)</label><input type="number" id="edit-iva" step="0.01" min="0" inputmode="decimal"></div>
+      </div>
+
+      <div class="input-group">
+        <label for="edit-notas">Notas</label>
+        <input type="text" id="edit-notas" autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label for="edit-motivo">Motivo de la edición *</label>
+        <input type="text" id="edit-motivo" placeholder="Ej: Cantidad capturada incorrecta" autocomplete="off">
+      </div>
+
+      <p id="edit-status" class="send-status"></p>
+
+      <button id="btn-guardar-edicion" class="btn-primary btn-large">✅ Guardar Edición</button>
+      <button id="btn-cancelar-edicion" class="btn-secondary">Cancelar</button>
+    </div>
+  </div>
 
   <!-- Vista: LOADING -->
   <section id="view-loading" class="view-section hidden">
