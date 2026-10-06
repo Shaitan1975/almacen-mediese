@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.6)
+// ALMACÉN MEDIESE - LÓGICA DE LA PWA (v2.7)
 // Login + Registro + Dashboard + Stock + Lotes + PEPS + Edición
+// + Reabrir Lote + Editar desde Lote
 // ═══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -23,6 +24,7 @@ const App = (() => {
   let lotesTodosCache = [];
   let movimientosEditarCache = [];
   let movimientoEnEdicion = null;
+  let loteActivoEnVista = null;   // ⚠️ NUEVO: guardar el lote que estamos viendo
 
   // ═══════════════════════════════════════════════════════════════
   // UTILIDADES
@@ -143,7 +145,6 @@ const App = (() => {
       if (btnDash) { btnDash.classList.remove("hidden"); btnDash.addEventListener("click", abrirDashboard); }
     }
 
-    // Botón admin: Reconstruir Stock
     if (usuarioActual.rol === "admin") {
       const btnRecon = document.getElementById("btn-reconstruir-stock");
       if (btnRecon) {
@@ -160,12 +161,10 @@ const App = (() => {
     addEventSafe("btn-volver-menu", "click", volverAlMenu);
     addEventSafe("btn-cerrar-historial", "click", volverAlMenu);
 
-    // Modal editar
     addEventSafe("btn-cerrar-modal-editar", "click", cerrarModalEditar);
     addEventSafe("btn-cancelar-edicion", "click", cerrarModalEditar);
     addEventSafe("btn-guardar-edicion", "click", guardarEdicion);
 
-    // Vista editar
     addEventSafe("btn-cerrar-editar-movs", "click", volverAlMenu);
     addEventSafe("btn-buscar-editar-movs", "click", buscarMovimientosEditar);
     addEventSafe("editar-movs-buscar", "input", (e) => {
@@ -205,6 +204,7 @@ const App = (() => {
   function volverAlMenu() {
     insumoSeleccionado = null;
     tipoMovimientoActual = null;
+    loteActivoEnVista = null;
     mostrarVista("view-menu");
   }
 
@@ -948,7 +948,7 @@ const App = (() => {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ⚠️ EDITAR MOVIMIENTOS
+  // EDITAR MOVIMIENTOS
   // ═══════════════════════════════════════════════════════════════
 
   function abrirEditarMovs() {
@@ -1138,6 +1138,10 @@ const App = (() => {
         }
         if (!document.getElementById("view-dashboard").classList.contains("hidden")) {
           cargarMovimientosDashboard();
+        }
+        // ⚠️ NUEVO: si estamos viendo movimientos de un lote, recargar
+        if (!document.getElementById("view-lote-movs").classList.contains("hidden") && loteActivoEnVista) {
+          verMovimientosDeLote(loteActivoEnVista);
         }
       }, 1200);
     } catch (e) {
@@ -1529,6 +1533,7 @@ const App = (() => {
     renderizarLotes(filtrados);
   }
 
+  // ⚠️ MODIFICADO: agrega botón "🔓 Reabrir" en lotes cerrados
   function renderizarLotes(items) {
     const contenedor = document.getElementById("lista-lotes");
     const resumen = document.getElementById("lotes-resumen");
@@ -1569,16 +1574,70 @@ const App = (() => {
         (lote.status === "CERRADO"
           ? '<div class="stock-item-info"><span>Cierre: <strong>' + (lote.fecha_cierre || '-') + '</strong> ' + (lote.usuario_cierre || '') + '</span></div>'
           : '') +
-        '<button class="btn-primary" style="margin-top:10px; font-size:13px; padding:8px;">👁 Ver movimientos</button>';
+        '<div class="lote-acciones" style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">' +
+          '<button class="btn-primary btn-ver-movs" style="flex:1; font-size:13px; padding:8px;">👁 Ver movimientos</button>' +
+          (lote.status === "CERRADO"
+            ? '<button class="btn-primary btn-reabrir" style="flex:1; font-size:13px; padding:8px; background:#10B981; border-color:#10B981;">🔓 Reabrir</button>'
+            : '') +
+        '</div>';
 
-      div.querySelector("button").addEventListener("click", () => verMovimientosDeLote(lote));
+      div.querySelector(".btn-ver-movs").addEventListener("click", () => verMovimientosDeLote(lote));
+      const btnReabrir = div.querySelector(".btn-reabrir");
+      if (btnReabrir) {
+        btnReabrir.addEventListener("click", () => reabrirLoteDesdeVista(lote));
+      }
+
       contenedor.appendChild(div);
     });
   }
 
+  // ⚠️ NUEVO: reabrir un lote desde la vista "Ver Lotes"
+  async function reabrirLoteDesdeVista(lote) {
+    const confirmar = confirm(
+      "¿Reabrir el lote " + lote.lote + "?\n\n" +
+      "Esto lo pondrá en estado ABIERTO y permitirá editar sus movimientos.\n\n" +
+      "Deberás volver a cerrarlo cuando termines de corregir."
+    );
+
+    if (!confirmar) return;
+
+    mostrarVista("view-loading");
+    document.getElementById("loading-text").textContent = "Reabriendo lote...";
+
+    try {
+      const url = CONFIG.APPS_SCRIPT_URL + "?accion=abrir_lote&data=" +
+        encodeURIComponent(JSON.stringify({
+          lote: lote.lote,
+          codigo_oar: lote.codigo_oar,
+          descripcion: lote.descripcion,
+          notas: "[Reabierto desde Ver Lotes]",
+          usuario: usuarioActual.user,
+          rol: usuarioActual.rol,
+        }));
+
+      const resp = await llamarBackend(url);
+
+      if (!resp.ok) {
+        alert("Error al reabrir: " + (resp.error || "Desconocido"));
+        mostrarVista("view-lotes");
+        return;
+      }
+
+      alert("✅ " + (resp.mensaje || "Lote reabierto"));
+      // Recargar la lista de lotes
+      await verLotes();
+    } catch (e) {
+      alert("Error: " + e.message);
+      mostrarVista("view-lotes");
+    }
+  }
+
+  // ⚠️ MODIFICADO: guarda loteActivoEnVista + botón "✏️ Editar" en cada movimiento
   async function verMovimientosDeLote(lote) {
     mostrarVista("view-loading");
     document.getElementById("loading-text").textContent = "Cargando movimientos del lote...";
+
+    loteActivoEnVista = lote;
 
     try {
       const url = CONFIG.APPS_SCRIPT_URL + "?accion=movimientos_lote&lote=" + encodeURIComponent(lote.lote);
@@ -1625,12 +1684,48 @@ const App = (() => {
         resp.movimientos.forEach(m => {
           const card = document.createElement("div");
           card.className = "movimiento-card mov-" + String(m.tipo).toLowerCase();
+          if (m.estado === "CANCELADO") card.style.opacity = "0.5";
+
           card.innerHTML =
             '<div class="mov-header"><span class="mov-tipo">' + m.tipo + '</span><span class="mov-hora">' + (m.fecha || '') + ' ' + (m.hora || '') + '</span></div>' +
-            '<div class="mov-codigo">' + m.codigo + '</div>' +
+            '<div class="mov-codigo">' + m.codigo + ' <small style="color:#888;">(' + (m.id || '') + ')</small></div>' +
             '<div class="mov-desc">' + (m.descripcion || '') + '</div>' +
             '<div class="mov-cantidad">' + m.cantidad + ' ' + (m.unidad || '') + '</div>' +
             (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
+
+          // ⚠️ NUEVO: botón Editar si el lote está ABIERTO y el movimiento no está cancelado
+          if (lote.status === "ABIERTO" && m.estado !== "CANCELADO") {
+            const btnEditar = document.createElement("button");
+            btnEditar.className = "btn-primary";
+            btnEditar.style.cssText = "margin-top:10px; font-size:13px; padding:8px; background:#F59E0B; border-color:#F59E0B;";
+            btnEditar.textContent = "✏️ Editar";
+            btnEditar.addEventListener("click", () => {
+              abrirModalEditar({
+                id: m.id,
+                tipo: m.tipo,
+                codigo_oar: m.codigo,
+                descripcion: m.descripcion,
+                cantidad: m.cantidad,
+                unidad: m.unidad,
+                lote_insumo: m.lote_insumo || "",
+                lote_trabajo: lote.lote,  // sabemos que es este lote
+                ubicacion: m.ubicacion || "",
+                proveedor_cliente: m.proveedor || "",
+                pu: m.pu || 0,
+                iva: m.iva || 0,
+                notas: m.notas || "",
+                fecha: m.fecha,
+                hora: m.hora,
+                usuario: m.usuario,
+                nombre_usuario: m.nombre_usuario,
+                rol: m.rol,
+                estado: m.estado,
+                editable: true,
+              });
+            });
+            card.appendChild(btnEditar);
+          }
+
           contenedor.appendChild(card);
         });
       }
