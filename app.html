@@ -145,7 +145,11 @@
         <div class="input-group"><label for="pu">PU ($)</label><input type="number" id="pu" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>
         <div class="input-group"><label for="iva">IVA ($)</label><input type="number" id="iva" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>
       </div>
-
+      <div class="input-group hidden" id="grupo-fecha-manual">
+        <label for="fecha-manual">Fecha del movimiento <span class="label-opcional">(opcional)</span></label>
+        <input type="date" id="fecha-manual">
+        <span class="label-opcional">Si se deja vacío, se usa la fecha actual. Solo supervisor+</span>
+      </div>
       <div class="input-group">
         <label for="notas">Notas (opcional)</label>
         <input type="text" id="notas" placeholder="Ej: Compra OC-1234">
