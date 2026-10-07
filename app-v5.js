@@ -258,6 +258,24 @@ const App = (() => {
     document.getElementById("registro-status").textContent = "";
     document.getElementById("registro-status").className = "send-status";
 
+    // ⚠️ NUEVO: manejo del input de fecha manual
+    const grupoFechaManual = document.getElementById("grupo-fecha-manual");
+    const inputFechaManual = document.getElementById("fecha-manual");
+    const rolesConFechaManual = ["supervisor", "gerencia", "admin"];
+
+    if (grupoFechaManual && inputFechaManual) {
+      if (rolesConFechaManual.includes(usuarioActual.rol)) {
+        grupoFechaManual.classList.remove("hidden");
+        inputFechaManual.value = "";
+        // Poner max = hoy (no permitir futuro)
+        const hoy = new Date().toISOString().split("T")[0];
+        inputFechaManual.setAttribute("max", hoy);
+      } else {
+        grupoFechaManual.classList.add("hidden");
+        inputFechaManual.value = "";
+      }
+    }
+
     const titulos = {
       "ENTRADA": "Registrar ENTRADA",
       "SALIDA": "Registrar SALIDA",
@@ -556,6 +574,20 @@ const App = (() => {
     statusEl.textContent = "Guardando...";
     statusEl.className = "send-status";
 
+    // ⚠️ NUEVO: leer fecha manual
+    let fechaManual = "";
+    const inputFechaManual = document.getElementById("fecha-manual");
+    const rolesConFechaManual = ["supervisor", "gerencia", "admin"];
+    
+    if (inputFechaManual && rolesConFechaManual.includes(usuarioActual.rol)) {
+      const valorISO = inputFechaManual.value.trim();  // viene como yyyy-mm-dd
+      if (valorISO) {
+        // Convertir a dd/mm/yyyy para el backend
+        const p = valorISO.split("-");
+        fechaManual = p[2] + "/" + p[1] + "/" + p[0];
+      }
+    }
+    
     const payload = {
       accion: "registrar_movimiento",
       tipo_movimiento: tipoMovimientoActual,
@@ -573,6 +605,7 @@ const App = (() => {
       usuario: usuarioActual.user,
       nombre_usuario: usuarioActual.nombre,
       rol: usuarioActual.rol,
+      fecha_manual: fechaManual,   // ⚠️ NUEVO
     };
 
     try {
@@ -617,10 +650,16 @@ const App = (() => {
     document.getElementById("exito-tipo").textContent = tipoMovimientoActual;
     document.getElementById("exito-insumo").textContent = insumoSeleccionado.codigo + " - " + insumoSeleccionado.descripcion;
     document.getElementById("exito-cantidad").textContent = cantidad + " " + insumoSeleccionado.unidad;
-    document.getElementById("exito-fecha").textContent = (resp.fecha || "") + " " + (resp.hora || "");
+  
+    // ⚠️ NUEVO: mostrar retroactivo
+    let textoFecha = (resp.fecha || "") + " " + (resp.hora || "");
+    if (resp.retroactivo) {
+      textoFecha = "⚠️ RETROACTIVO: " + (resp.fecha || "") + " (registrado hoy)";
+    }
+    document.getElementById("exito-fecha").textContent = textoFecha;
+  
     mostrarVista("view-exito");
-  }
-
+}
   // ═══════════════════════════════════════════════════════════════
   // HISTORIAL
   // ═══════════════════════════════════════════════════════════════
@@ -741,14 +780,17 @@ const App = (() => {
       card.className = "movimiento-card mov-" + m.tipo.toLowerCase();
       if (m.estado === "CANCELADO") card.style.opacity = "0.5";
 
-      card.innerHTML =
-        '<div class="mov-header"><span class="mov-tipo">' + m.tipo + '</span><span class="mov-hora">' + m.hora + '</span></div>' +
-        '<div class="mov-codigo">' + m.codigo + '</div>' +
-        '<div class="mov-desc">' + m.descripcion + '</div>' +
-        '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
-        '<div class="mov-usuario">Usuario: ' + (m.nombre_usuario || m.usuario) + ' (' + m.rol + ')</div>' +
-        (m.lote_insumo ? '<div class="mov-usuario">Lote: ' + m.lote_insumo + '</div>' : '') +
-        (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
+      // ⚠️ NUEVO: detectar si es retroactivo (notas contiene "[Fecha manual:")
+    const esRetro = m.notas && String(m.notas).includes("[Fecha manual:");
+    
+    card.innerHTML =
+      '<div class="mov-header"><span class="mov-tipo">' + m.tipo + '</span><span class="mov-hora">' + m.hora + '</span></div>' +
+      '<div class="mov-codigo">' + m.codigo + (esRetro ? ' <span style="background:#FEF3C7; color:#92400E; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:bold;">📅 RETRO</span>' : '') + '</div>' +
+      '<div class="mov-desc">' + m.descripcion + '</div>' +
+      '<div class="mov-cantidad">' + m.cantidad + ' ' + m.unidad + '</div>' +
+      '<div class="mov-usuario">Usuario: ' + (m.nombre_usuario || m.usuario) + ' (' + m.rol + ')</div>' +
+      (m.lote_insumo ? '<div class="mov-usuario">Lote: ' + m.lote_insumo + '</div>' : '') +
+      (m.estado === "CANCELADO" ? '<div class="mov-cancelado">CANCELADO</div>' : '');
 
       if (m.estado !== "CANCELADO") {
         const btnCorregir = document.createElement("button");
