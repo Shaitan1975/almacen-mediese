@@ -887,3 +887,9 @@ html, body {
   background: #F59E0B; border: 1px solid #F59E0B; color: #fff; font-weight: 600;
 }
 .acciones-card .btn-editar-card, .acciones-card .btn-cancelar-mov { margin-top: 0; }
+
+/* ═══ v3.1 ═══ */
+.stock-negativo { border-left: 4px solid #B91C1C !important; background: #FEF2F2; }
+.stock-negativo .stock-item-saldo { color: #B91C1C; }
+.badge { display: inline-block; min-width: 20px; padding: 1px 6px; margin-left: 6px; border-radius: 10px; background: #B91C1C; color: #fff; font-size: 12px; font-weight: 700; }
+.exito-fila.error strong { color: #B91C1C; }

@@ -7,7 +7,7 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261018a">
+<link rel="stylesheet" href="styles.css?v=20261018b">
 </head>
 <body class="app-body">
 
@@ -68,6 +68,9 @@
       <button id="btn-ver-lotes" class="btn-secondary" style="background: #FEF3C7; color: #92400E; border-color: #FDE68A;">
         📋 Ver Lotes de Trabajo
       </button>
+      <button id="btn-alertas" class="btn-secondary hidden" style="background: #FEF2F2; color: #B91C1C; border-color: #FECACA;">
+        ⚠️ Alertas de stock <span id="badge-alertas" class="badge hidden"></span>
+      </button>
       <button id="btn-editar-movs" class="btn-secondary hidden" style="background: #FEF2F2; color: #991B1B; border-color: #FECACA;">
         ✏️ Editar Movimientos
       </button>
@@ -111,7 +114,7 @@
       </div>
 
       <div class="input-group" id="grupo-lote-insumo-select">
-        <label for="lote-insumo">Lote del insumo <span class="label-opcional">(PEPS por defecto)</span></label>
+        <label for="lote-insumo"><span id="lote-insumo-etiqueta">Lote del insumo</span></label>
         <select id="lote-insumo" class="manual-select">
           <option value="">-- Selecciona un insumo primero --</option>
         </select>
@@ -126,7 +129,8 @@
 
       <div class="input-group" id="grupo-lote-trabajo">
         <label for="lote-trabajo">Lote de trabajo</label>
-        <input type="text" id="lote-trabajo" placeholder="Ej: LR7RA-1">
+        <input type="text" id="lote-trabajo" placeholder="Ej: LR7RA-1" list="lotes-abiertos-lista" autocomplete="off" autocapitalize="characters">
+        <datalist id="lotes-abiertos-lista"></datalist>
         <span id="lote-trabajo-status" class="lote-status"></span>
       </div>
 
@@ -145,7 +149,8 @@
         <input type="text" id="proveedor" placeholder="Ej: TRES VILLAS / PRODUCCION">
       </div>
 
-      <div class="input-group-row">
+      <p id="aviso-pu" class="label-opcional hidden">💲 El costo lo pone el sistema con el PU del lote.</p>
+      <div class="input-group-row" id="grupo-pu-iva">
         <div class="input-group"><label for="pu">PU ($)</label><input type="number" id="pu" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>
         <div class="input-group"><label for="iva">IVA ($)</label><input type="number" id="iva" step="0.01" min="0" placeholder="0.00" inputmode="decimal"></div>
       </div>
@@ -272,6 +277,7 @@
         <div class="exito-fila"><span>Tipo:</span><strong id="exito-tipo">-</strong></div>
         <div class="exito-fila"><span>Insumo:</span><strong id="exito-insumo">-</strong></div>
         <div class="exito-fila"><span>Cantidad:</span><strong id="exito-cantidad">-</strong></div>
+        <div id="exito-reparto" class="hidden"></div>
         <div class="exito-fila"><span>Fecha/Hora:</span><strong id="exito-fecha">-</strong></div>
       </div>
       <button id="btn-registrar-otro" class="btn-primary btn-large">🔄 Registrar otro</button>
@@ -394,6 +400,7 @@
         <div class="input-group"><label for="edit-iva">IVA ($)</label><input type="number" id="edit-iva" step="0.01" min="0" inputmode="decimal"></div>
       </div>
 
+      <p id="edit-aviso-pu" class="label-opcional hidden">💲 En salidas y devoluciones el PU es el del lote; si cambias el lote, el sistema lo recalcula.</p>
       <div class="input-group"><label for="edit-notas">Notas</label><input type="text" id="edit-notas" autocomplete="off"></div>
       <div class="input-group"><label for="edit-motivo">Motivo de la edición *</label><input type="text" id="edit-motivo" placeholder="Ej: Cantidad capturada incorrecta" autocomplete="off"></div>
 
@@ -402,6 +409,18 @@
       <button id="btn-cancelar-edicion" class="btn-secondary">Cancelar</button>
     </div>
   </div>
+
+  <!-- Vista: ALERTAS (supervisor) -->
+  <section id="view-alertas" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-alertas" class="btn-cerrar">✖</button>
+        <h2>⚠️ Alertas de stock</h2>
+      </div>
+      <p class="label-opcional" style="margin-bottom:12px;">Salidas que dejaron un lote en negativo (por ejemplo, de Visor Tarimas). Corrige con una entrada o edición y márcala revisada.</p>
+      <div id="lista-alertas" class="lista-stock"></div>
+    </div>
+  </section>
 
   <!-- Vista: USUARIOS (admin) -->
   <section id="view-usuarios" class="view-section hidden">
@@ -491,7 +510,7 @@
 
 </main>
 
-<script src="app.js?v=20261018a"></script>
+<script src="app.js?v=20261018b"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();

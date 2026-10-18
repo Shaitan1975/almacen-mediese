@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - FRONTEND v3.0
+// ALMACÉN MEDIESE - FRONTEND v3.1
+// v3.1: PEPS automático, PU calculado por el servidor, alertas, stock con valor
 // Login en servidor con token (igual que Mantenimiento Mediese)
 // Registro + Dashboard + Stock + Lotes + PEPS + Edición + Usuarios
 // ═══════════════════════════════════════════════════════════════════
@@ -26,6 +27,7 @@ const App = (() => {
   let movimientoEnEdicion = null;
   let loteActivoEnVista = null;
   let usuariosCache = [];
+  let stockValorTotal = 0;
 
   const ROLES_SUPERVISOR = ["supervisor", "gerencia", "admin"];
   // Solo para mostrar u ocultar botones. Quien decide de verdad es el servidor.
@@ -57,6 +59,14 @@ const App = (() => {
     return String(t === null || t === undefined ? "" : t)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // Pone el cursor en un campo solo si el usuario no está ya escribiendo en otro
+  function enfocarSiLibre(id) {
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body || a.tagName === "BUTTON") { const el = $(id); if (el) el.focus(); }
+    }, 100);
   }
 
   function esSupervisor() { return usuarioActual && ROLES_SUPERVISOR.includes(usuarioActual.rol); }
@@ -219,6 +229,8 @@ const App = (() => {
     on("btn-dashboard", "click", abrirDashboard);
     on("btn-reconstruir-stock", "click", reconstruirStockManual);
     on("btn-usuarios", "click", verUsuarios);
+    on("btn-alertas", "click", verAlertas);
+    on("btn-cerrar-alertas", "click", volverAlMenu);
 
     // Formulario de movimiento
     on("btn-cerrar-form", "click", volverAlMenu);
@@ -297,6 +309,8 @@ const App = (() => {
     mostrar("btn-dashboard", sup);
     mostrar("btn-reconstruir-stock", usuarioActual.rol === "admin");
     mostrar("btn-usuarios", usuarioActual.rol === "admin");
+    mostrar("btn-alertas", sup);
+    if (sup) actualizarBadgeAlertas();
   }
 
   async function cargarCatalogos() {
@@ -309,7 +323,7 @@ const App = (() => {
   const VISTAS = ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
     "view-lotes", "view-lote-movs", "view-editar-movs", "view-usuarios",
-    "view-usuario-form", "view-password"];
+    "view-usuario-form", "view-password", "view-alertas"];
 
   function mostrarVista(id) {
     VISTAS.forEach(v => { const el = $(v); if (el) el.classList.add("hidden"); });
@@ -328,6 +342,7 @@ const App = (() => {
     tipoMovimientoActual = null;
     loteActivoEnVista = null;
     mostrarVista("view-menu");
+    if (esSupervisor()) actualizarBadgeAlertas();
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -371,12 +386,17 @@ const App = (() => {
     $("form-titulo").textContent = titulos[tipo] || "Registrar Movimiento";
 
     $("grupo-lote-trabajo").classList.toggle("hidden", tipo === "ENTRADA");
+    // El costo de SALIDAS y DEVOLUCIONES lo pone el servidor (PU del lote)
+    $("grupo-pu-iva").classList.toggle("hidden", !esEntrada);
+    $("aviso-pu").classList.toggle("hidden", esEntrada);
+    $("lote-insumo-etiqueta").textContent = tipo === "DEVOLUCION" ? "Lote al que regresa *" : "Lote del insumo";
+    if (!esEntrada) cargarLotesTrabajoAbiertos();
     $("grupo-ubicacion").classList.remove("hidden");
     $("grupo-proveedor").classList.toggle("hidden", tipo === "DEVOLUCION");
 
     llenarUbicaciones();
     mostrarVista("view-form");
-    setTimeout(() => $("buscar-insumo").focus(), 100);
+    enfocarSiLibre("buscar-insumo");
   }
 
   function hoyISO() {
@@ -469,29 +489,37 @@ const App = (() => {
   async function cargarLotesDisponibles(codigo) {
     const select = $("lote-insumo");
     const infoPanel = $("info-lote-insumo");
+    const esDevolucion = tipoMovimientoActual === "DEVOLUCION";
     select.innerHTML = '<option value="">-- Cargando lotes... --</option>';
     infoPanel.classList.add("hidden");
 
-    const resp = await api("lotes_disponibles", { codigo: codigo });
-    if (!resp.ok || !resp.lotes || resp.lotes.length === 0) {
-      select.innerHTML = '<option value="">-- Sin lotes disponibles --</option>';
-      return;
+    const resp = await api("lotes_disponibles", { codigo: codigo, incluir_agotados: esDevolucion ? "1" : "" });
+    const lotes = resp.ok ? (resp.lotes || []) : [];
+    select.innerHTML = "";
+
+    if (esDevolucion) {
+      select.appendChild(new Option(lotes.length ? "-- Selecciona el lote --" : "-- Este insumo no tiene lotes --", ""));
+    } else if (lotes.length) {
+      // Por defecto el servidor reparte del lote más viejo al más nuevo
+      select.appendChild(new Option("⭐ PEPS automático (el sistema elige el lote)", ""));
+    } else {
+      select.appendChild(new Option("-- Sin stock disponible --", ""));
     }
 
-    select.innerHTML = '<option value="">-- Selecciona un lote --</option>';
-    resp.lotes.forEach((lote, index) => {
-      const opt = document.createElement("option");
-      opt.value = lote.lote;
-      opt.textContent = lote.lote + " | " + fmtNum(lote.saldo) + " " + (lote.unidad || "") + (index === 0 ? " ⭐ (PEPS)" : "");
+    lotes.forEach((lote, index) => {
+      const opt = new Option(
+        lote.lote + " | " + fmtNum(lote.saldo) + " " + (lote.unidad || "") +
+        (lote.fecha_entrada ? " | " + lote.fecha_entrada : "") + (!esDevolucion && index === 0 ? " (más viejo)" : ""),
+        lote.lote
+      );
       opt.dataset.saldo = lote.saldo;
       opt.dataset.pu = lote.pu;
-      opt.dataset.iva = lote.iva;
       opt.dataset.unidad = lote.unidad || "";
       opt.dataset.fecha = lote.fecha_entrada || "";
       opt.dataset.proveedor = lote.proveedor || "";
       select.appendChild(opt);
     });
-    select.selectedIndex = 1;
+    select.dataset.lotes = JSON.stringify(lotes);
     onLoteInsumoChange();
   }
 
@@ -499,17 +527,39 @@ const App = (() => {
     const select = $("lote-insumo");
     const infoPanel = $("info-lote-insumo");
     const op = select.options[select.selectedIndex];
-    if (!op || !op.value) { infoPanel.classList.add("hidden"); return; }
+    if (!op) { infoPanel.classList.add("hidden"); return; }
 
-    $("pu").value = parseFloat(op.dataset.pu) || 0;
-    $("iva").value = parseFloat(op.dataset.iva) || 0;
+    if (!op.value) {
+      if (tipoMovimientoActual !== "SALIDA") { infoPanel.classList.add("hidden"); return; }
+      let lotes = [];
+      try { lotes = JSON.parse(select.dataset.lotes || "[]"); } catch (e) { lotes = []; }
+      if (!lotes.length) { infoPanel.classList.add("hidden"); return; }
+      infoPanel.innerHTML =
+        '<strong>⭐ PEPS automático:</strong> sale primero del lote <strong>' + esc(lotes[0].lote) + '</strong> (' +
+        fmtNum(lotes[0].saldo) + ' ' + esc(lotes[0].unidad) + '). Si no alcanza, el sistema sigue con el siguiente lote.';
+      infoPanel.classList.remove("hidden");
+      return;
+    }
 
     infoPanel.innerHTML =
-      '<strong>📦 Lote seleccionado:</strong> ' + esc(op.value) + '<br/>' +
+      '<strong>📦 Lote:</strong> ' + esc(op.value) + '<br/>' +
       '<strong>Saldo:</strong> ' + fmtNum(op.dataset.saldo) + ' ' + esc(op.dataset.unidad) + '<br/>' +
-      '<strong>Fecha entrada:</strong> ' + esc(op.dataset.fecha) + '<br/>' +
-      '<strong>Proveedor:</strong> ' + esc(op.dataset.proveedor || "-");
+      '<strong>Fecha entrada:</strong> ' + esc(op.dataset.fecha || "-") + '<br/>' +
+      '<strong>PU del lote:</strong> $' + fmtNum(op.dataset.pu) +
+      (op.dataset.proveedor ? '<br/><strong>Proveedor:</strong> ' + esc(op.dataset.proveedor) : '');
     infoPanel.classList.remove("hidden");
+  }
+
+  async function cargarLotesTrabajoAbiertos() {
+    const r = await api("listar_lotes_abiertos");
+    const dl = $("lotes-abiertos-lista");
+    dl.innerHTML = "";
+    (r.ok ? r.lotes : []).forEach(l => {
+      const o = document.createElement("option");
+      o.value = l.lote;
+      o.label = l.codigo_oar + " - " + l.descripcion;
+      dl.appendChild(o);
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -532,27 +582,8 @@ const App = (() => {
       loteInsumo = $("lote-insumo").value;
     }
 
-    if (tipoMovimientoActual === "SALIDA") {
-      msg(statusEl, "Validando stock...");
-      const respStock = await api("stock_insumo_total", { codigo: insumoSeleccionado.codigo });
-      if (respStock.ok) {
-        const unidad = insumoSeleccionado.unidad || "";
-        let disponible = Number(respStock.saldo_total) || 0;
-        let etiqueta = "Insumo: " + insumoSeleccionado.codigo;
-        if (loteInsumo) {
-          const info = (respStock.lotes || []).find(l => l.lote === loteInsumo);
-          disponible = info ? Number(info.saldo) : 0;
-          etiqueta = "Lote: " + loteInsumo;
-        }
-        if (cantidad > disponible) {
-          msg(statusEl, "Stock insuficiente. Disponible: " + fmtNum(disponible) + " " + unidad, "error");
-          const continuar = confirm(
-            "STOCK INSUFICIENTE\n\n" + etiqueta + "\nDisponible: " + fmtNum(disponible) + " " + unidad +
-            "\nSolicitado: " + cantidad + " " + unidad + "\n\n¿Deseas continuar de todos modos?"
-          );
-          if (!continuar) return;
-        }
-      }
+    if (tipoMovimientoActual === "DEVOLUCION" && !loteInsumo) {
+      return msg(statusEl, "Selecciona el lote al que regresa el material", "error");
     }
 
     let fechaManual = "";
@@ -571,8 +602,8 @@ const App = (() => {
       cantidad: cantidad,
       ubicacion: $("ubicacion").value,
       proveedor_cliente: $("proveedor").value.trim(),
-      pu: parseFloat($("pu").value) || 0,
-      iva: parseFloat($("iva").value) || 0,
+      pu: tipoMovimientoActual === "ENTRADA" ? (parseFloat($("pu").value) || 0) : 0,
+      iva: tipoMovimientoActual === "ENTRADA" ? (parseFloat($("iva").value) || 0) : 0,
       notas: $("notas").value.trim(),
       fecha_manual: fechaManual,
     };
@@ -593,7 +624,9 @@ const App = (() => {
           msg(statusEl, "");
           return;
         }
-        return msg(statusEl, "Error: " + (resp.error || "Desconocido"), "error");
+        msg(statusEl, "❌ " + (resp.error || "Error desconocido"), "error");
+        if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+        return;
       }
       mostrarExito(resp, cantidad);
     } finally {
@@ -602,7 +635,16 @@ const App = (() => {
   }
 
   function mostrarExito(resp, cantidad) {
-    $("exito-id").textContent = resp.id_movimiento || "-";
+    $("exito-id").textContent = (resp.ids && resp.ids.length > 1) ? resp.ids.join(", ") : (resp.id_movimiento || "-");
+    const rep = $("exito-reparto");
+    if (resp.asignaciones && resp.asignaciones.length) {
+      rep.innerHTML = '<div class="exito-fila"><span>Lote(s):</span><strong>' +
+        resp.asignaciones.map(a => esc(a.lote) + " → " + fmtNum(a.cantidad) + " " + esc(resp.unidad || "")).join("<br>") +
+        '</strong></div>' + (resp.alerta ? '<div class="exito-fila error"><span>⚠️</span><strong>Quedó stock negativo: se avisó al supervisor</strong></div>' : '');
+      rep.classList.remove("hidden");
+    } else {
+      rep.classList.add("hidden");
+    }
     $("exito-tipo").textContent = tipoMovimientoActual;
     $("exito-insumo").textContent = insumoSeleccionado.codigo + " - " + insumoSeleccionado.descripcion;
     $("exito-cantidad").textContent = cantidad + " " + insumoSeleccionado.unidad;
@@ -757,7 +799,8 @@ const App = (() => {
     cargando("Cargando stock...");
     const resp = await api("listar_stock");
     if (!resp.ok) { alert("Error al cargar stock: " + resp.error); return volverAlMenu(); }
-    stockCache = (resp.items || []).filter(item => Number(item.saldo) > 0);
+    stockCache = resp.items || [];
+    stockValorTotal = resp.valor_total || 0;
     $("stock-buscar").value = "";
     renderizarStock(stockCache);
     mostrarVista("view-stock");
@@ -781,29 +824,36 @@ const App = (() => {
 
   function renderizarStock(items) {
     const cont = $("lista-stock");
-    $("stock-resumen").innerHTML = tarjetasResumen([
-      [items.length, "Insumos / Lotes"],
-      [items.filter(i => i.saldo > 0).length, "Con Stock"],
-      [items.filter(i => i.saldo === 0).length, "Sin Stock"],
-    ]);
+    const negativos = items.filter(i => i.saldo < 0);
+    const resumen = [
+      [items.filter(i => i.saldo > 0).length, "Lotes con stock"],
+      [negativos.length, "⚠️ En negativo"],
+    ];
+    if (esSupervisor()) resumen.push(["$" + fmtNum(stockValorTotal), "Valor inventario"]);
+    $("stock-resumen").innerHTML = tarjetasResumen(resumen);
     cont.innerHTML = "";
     if (items.length === 0) { cont.innerHTML = '<div class="stock-vacio">No hay insumos con stock</div>'; return; }
 
-    items.slice().sort((a, b) => String(a.codigo).localeCompare(String(b.codigo))).forEach(item => {
+    // Negativos primero (hay que corregirlos), luego por código
+    items.slice().sort((a, b) => {
+      if ((a.saldo < 0) !== (b.saldo < 0)) return a.saldo < 0 ? -1 : 1;
+      return String(a.codigo).localeCompare(String(b.codigo)) || String(a.primera_entrada).localeCompare(String(b.primera_entrada));
+    }).forEach(item => {
       const div = document.createElement("div");
       div.className = "stock-item";
-      if (item.saldo === 0) div.classList.add("stock-cero");
+      if (item.saldo < 0) div.classList.add("stock-negativo");
       else if (item.saldo < 100) div.classList.add("stock-bajo");
       div.innerHTML =
         '<div class="stock-item-header">' +
           '<span class="stock-item-codigo">' + esc(item.codigo) + '</span>' +
-          '<span class="stock-item-saldo">' + fmtNum(item.saldo) + ' ' + esc(item.unidad) + '</span>' +
+          '<span class="stock-item-saldo">' + (item.saldo < 0 ? "⚠️ " : "") + fmtNum(item.saldo) + ' ' + esc(item.unidad) + '</span>' +
         '</div>' +
         '<div class="stock-item-desc">' + esc(item.descripcion || '-') + '</div>' +
         '<div class="stock-item-info">' +
-          '<span>Lote: <strong>' + esc(item.lote || 'SIN_LOTE') + '</strong></span>' +
+          '<span>Lote: <strong>' + esc(item.lote || 'SIN_LOTE') + '</strong>' + (item.primera_entrada ? ' · ' + esc(item.primera_entrada) : '') + '</span>' +
           '<span>' + esc(item.ubicacion || '-') + '</span>' +
-        '</div>';
+        '</div>' +
+        (esSupervisor() && item.pu ? '<div class="stock-item-info"><span>PU: $' + fmtNum(item.pu) + '</span><span>Valor: $' + fmtNum(item.valor) + '</span></div>' : '');
       cont.appendChild(div);
     });
   }
@@ -831,7 +881,7 @@ const App = (() => {
     $("lista-editar-movs").innerHTML = "";
     movimientosEditarCache = [];
     mostrarVista("view-editar-movs");
-    setTimeout(() => $("editar-movs-buscar").focus(), 100);
+    enfocarSiLibre("editar-movs-buscar");
   }
 
   let busquedaEditarSeq = 0;
@@ -904,6 +954,10 @@ const App = (() => {
     $("edit-proveedor").value = mov.proveedor_cliente || "";
     $("edit-pu").value = mov.pu || 0;
     $("edit-iva").value = mov.iva || 0;
+    const esEnt = String(mov.tipo).toUpperCase() === "ENTRADA";
+    $("edit-pu").disabled = !esEnt;
+    $("edit-iva").disabled = !esEnt;
+    $("edit-aviso-pu").classList.toggle("hidden", esEnt);
     $("edit-notas").value = mov.notas || "";
     $("edit-motivo").value = "";
     msg($("edit-status"), "");
@@ -944,7 +998,7 @@ const App = (() => {
       btn.disabled = false;
       return msg(statusEl, "Error: " + (resp.error || "Desconocido"), "error");
     }
-    msg(statusEl, "✅ " + resp.mensaje + " (" + resp.id_original + " → " + resp.id_nuevo + ")", "ok");
+    msg(statusEl, "✅ " + resp.mensaje, "ok");
 
     setTimeout(() => {
       cerrarModalEditar();
@@ -980,7 +1034,7 @@ const App = (() => {
     $("btn-abrir-lote-guardar").disabled = false;
     loteSeleccionadoAbrir = null;
     mostrarVista("view-abrir-lote");
-    setTimeout(() => $("abrir-lote-numero").focus(), 100);
+    enfocarSiLibre("abrir-lote-numero");
   }
 
   let validarLoteSeq = 0;
@@ -1053,7 +1107,7 @@ const App = (() => {
     const resp = await api("listar_lotes_abiertos");
     lotesCache = resp.ok ? (resp.lotes || []) : [];
     mostrarVista("view-cerrar-lote");
-    setTimeout(() => $("cerrar-lote-buscar").focus(), 100);
+    enfocarSiLibre("cerrar-lote-buscar");
   }
 
   function buscarLoteCerrar() {
@@ -1284,6 +1338,52 @@ const App = (() => {
       cont.appendChild(card);
     });
     mostrarVista("view-lote-movs");
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ALERTAS (supervisor): stock negativo aceptado de Visor Tarimas, etc.
+  // ═══════════════════════════════════════════════════════════════
+
+  async function actualizarBadgeAlertas() {
+    const r = await api("listar_alertas");
+    const b = $("badge-alertas");
+    if (!b || !r.ok) return;
+    b.textContent = r.pendientes ? String(r.pendientes) : "";
+    b.classList.toggle("hidden", !r.pendientes);
+  }
+
+  async function verAlertas() {
+    cargando("Cargando alertas...");
+    const r = await api("listar_alertas");
+    if (!r.ok) { alert("Error: " + r.error); return volverAlMenu(); }
+    const cont = $("lista-alertas");
+    cont.innerHTML = "";
+    if (!r.alertas.length) cont.innerHTML = '<p class="vacio">✅ No hay alertas pendientes.</p>';
+    r.alertas.forEach(a => {
+      const d = document.createElement("div");
+      d.className = "stock-item stock-negativo";
+      d.innerHTML =
+        '<div class="stock-item-header"><span class="stock-item-codigo">' + esc(a.codigo) + ' · ' + esc(a.lote) + '</span>' +
+          '<span class="stock-item-saldo">' + fmtNum(a.saldo) + '</span></div>' +
+        '<div class="stock-item-desc">' + esc(a.detalle) + '</div>' +
+        '<div class="stock-item-info"><span>' + esc(a.fecha) + ' ' + esc(a.hora) + '</span><span>' + esc(a.id_movimiento) + '</span></div>';
+      const b = document.createElement("button");
+      b.className = "btn-primary btn-chico btn-verde";
+      b.textContent = "✔️ Marcar revisada";
+      b.onclick = async () => {
+        const nota = prompt("¿Qué se hizo? (ej. se corrigió con conteo, se dio entrada faltante)");
+        if (nota === null) return;
+        const m = await api("marcar_alerta", { id_alerta: a.id, nota: nota }, "POST");
+        if (!m.ok) return alert("Error: " + m.error);
+        verAlertas();
+      };
+      const acc = document.createElement("div");
+      acc.className = "lote-acciones";
+      acc.appendChild(b);
+      d.appendChild(acc);
+      cont.appendChild(d);
+    });
+    mostrarVista("view-alertas");
   }
 
   // ═══════════════════════════════════════════════════════════════
