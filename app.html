@@ -7,7 +7,7 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261018b">
+<link rel="stylesheet" href="styles.css?v=20261018c">
 </head>
 <body class="app-body">
 
@@ -62,6 +62,13 @@
         </button>
       </div>
 
+      <button id="btn-conteo" class="btn-secondary" style="background: #ECFEFF; color: #0E7490; border-color: #A5F3FC;">
+        🧮 Contar inventario
+      </button>
+      <button id="btn-conteos" class="btn-secondary hidden" style="background: #ECFEFF; color: #0E7490; border-color: #A5F3FC;">
+        📋 Conteos por aplicar <span id="badge-conteos" class="badge hidden"></span>
+      </button>
+      <button id="btn-etiquetas" class="btn-secondary">🏷️ Etiquetas QR</button>
       <button id="btn-ver-stock" class="btn-secondary" style="background: #F0FDF4; color: #15803D; border-color: #BBF7D0;">
         📦 Ver Stock Actual
       </button>
@@ -97,7 +104,10 @@
 
       <div class="input-group">
         <label for="buscar-insumo">Buscar insumo</label>
-        <input type="text" id="buscar-insumo" placeholder="Escribe código o nombre (ej: HARINA, MPH0009)">
+        <div class="fila-scan">
+          <input type="text" id="buscar-insumo" placeholder="Código o nombre (ej: harina, MPH0009)" autocomplete="off">
+          <button type="button" id="btn-scan-form" class="btn-scan" title="Escanear etiqueta">📷</button>
+        </div>
         <div id="resultados-busqueda" class="resultados-busqueda hidden"></div>
       </div>
 
@@ -280,6 +290,7 @@
         <div id="exito-reparto" class="hidden"></div>
         <div class="exito-fila"><span>Fecha/Hora:</span><strong id="exito-fecha">-</strong></div>
       </div>
+      <button id="btn-etiqueta-entrada" class="btn-secondary hidden">🏷️ Imprimir etiquetas de este lote</button>
       <button id="btn-registrar-otro" class="btn-primary btn-large">🔄 Registrar otro</button>
       <button id="btn-volver-menu" class="btn-secondary">Volver al menú</button>
     </div>
@@ -333,7 +344,10 @@
         <h2>📦 Stock Actual</h2>
       </div>
       <div class="stock-buscador">
-        <input type="text" id="stock-buscar" placeholder="🔍 Buscar insumo por código o nombre...">
+        <div class="fila-scan">
+          <input type="text" id="stock-buscar" placeholder="🔍 Código, nombre o lote..." autocomplete="off">
+          <button type="button" id="btn-scan-stock" class="btn-scan" title="Escanear etiqueta">📷</button>
+        </div>
       </div>
       <div id="stock-resumen" class="stock-resumen"></div>
       <div id="lista-stock" class="lista-stock"></div>
@@ -409,6 +423,103 @@
       <button id="btn-cancelar-edicion" class="btn-secondary">Cancelar</button>
     </div>
   </div>
+
+  <!-- Vista: CONTAR INVENTARIO -->
+  <section id="view-conteo" class="view-section hidden">
+    <div class="form-container">
+      <div class="form-header">
+        <button id="btn-cerrar-conteo" class="btn-cerrar">✖</button>
+        <h2>🧮 Contar inventario</h2>
+      </div>
+      <div class="input-group">
+        <label for="conteo-ubicacion">Ubicación que estás contando</label>
+        <div class="fila-scan">
+          <select id="conteo-ubicacion" class="manual-select"></select>
+          <button type="button" id="btn-scan-ubic" class="btn-scan" title="Escanear etiqueta de ubicación">📷</button>
+        </div>
+      </div>
+
+      <div id="conteo-buscador">
+        <div class="input-group">
+          <label for="conteo-buscar">Insumo o lote</label>
+          <div class="fila-scan">
+            <input type="text" id="conteo-buscar" placeholder="Escanea 📷 o escribe (ej. harina)" autocomplete="off">
+            <button type="button" id="btn-scan-conteo" class="btn-scan" title="Escanear etiqueta del lote">📷</button>
+          </div>
+        </div>
+        <div id="conteo-resultados"></div>
+      </div>
+
+      <div id="conteo-panel" class="hidden tarjeta-conteo">
+        <div id="conteo-codigo" class="conteo-codigo"></div>
+        <div id="conteo-desc" class="conteo-desc"></div>
+        <div class="input-group">
+          <label for="conteo-lote">Lote</label>
+          <select id="conteo-lote" class="manual-select"></select>
+          <input type="text" id="conteo-lote-otro" class="hidden" placeholder="Escribe el lote" autocomplete="off" autocapitalize="characters" style="margin-top:8px;">
+        </div>
+        <div id="conteo-info" class="conteo-info"></div>
+        <label class="conteo-pregunta">¿Cuánto hay físicamente aquí?</label>
+        <div class="contador">
+          <button type="button" id="btn-menos">−</button>
+          <input id="conteo-cantidad" type="number" inputmode="decimal" min="0" step="any">
+          <button type="button" id="btn-mas">+</button>
+        </div>
+        <div id="conteo-unidad" class="conteo-info" style="text-align:center;"></div>
+        <div class="input-group"><input type="text" id="conteo-notas" placeholder="Notas (opcional)"></div>
+        <p id="conteo-status" class="send-status"></p>
+        <button id="btn-conteo-guardar" class="btn-primary btn-large">✅ Guardar conteo</button>
+        <button id="btn-conteo-cancelar" class="btn-secondary">Cancelar</button>
+      </div>
+
+      <h3 class="subtitulo">Contado hoy aquí <span id="conteo-avance" class="texto-suave"></span></h3>
+      <div id="conteo-lista"></div>
+      <details class="detalles">
+        <summary>En sistema pero no contado hoy (<span id="conteo-faltan-n">0</span>)</summary>
+        <div id="conteo-faltan"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Vista: CONTEOS POR APLICAR (supervisor) -->
+  <section id="view-conteos" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-conteos" class="btn-cerrar">✖</button>
+        <h2>📋 Conteos por aplicar</h2>
+      </div>
+      <p class="label-opcional" style="margin-bottom:12px;">Los conteos no mueven el stock hasta que los apliques. Al aplicar, el lote queda igual a lo contado con un movimiento de ajuste.</p>
+      <div id="lista-conteos"></div>
+      <div id="conteos-acciones" class="barra-acciones">
+        <button id="btn-aplicar-conteos" class="btn-primary">✅ Aplicar seleccionados</button>
+        <button id="btn-descartar-conteos" class="btn-secondary">Descartar seleccionados</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Vista: ETIQUETAS QR -->
+  <section id="view-etiquetas" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-etiquetas" class="btn-cerrar">✖</button>
+        <h2>🏷️ Etiquetas QR</h2>
+      </div>
+      <div class="chips" id="et-tabs">
+        <button class="chip-tab activo" data-modo="lotes">Lotes con stock</button>
+        <button class="chip-tab" data-modo="insumos">Insumos</button>
+        <button class="chip-tab" data-modo="ubicaciones">Ubicaciones</button>
+      </div>
+      <div class="stock-buscador"><input type="text" id="et-buscar" placeholder="🔍 Filtrar por código, nombre o lote..." autocomplete="off"></div>
+      <div class="fila-opciones">
+        <label class="check-fila"><input type="checkbox" id="et-todas"> Seleccionar todo lo que se ve</label>
+        <label class="check-fila">Copias c/u <input type="number" id="et-copias" min="1" max="50" value="1" inputmode="numeric" class="input-corto"></label>
+      </div>
+      <div id="lista-etiquetas"></div>
+      <div class="barra-acciones">
+        <button id="btn-imprimir-etiquetas" class="btn-primary">🖨️ Imprimir (0)</button>
+      </div>
+    </div>
+  </section>
 
   <!-- Vista: ALERTAS (supervisor) -->
   <section id="view-alertas" class="view-section hidden">
@@ -510,7 +621,15 @@
 
 </main>
 
-<script src="app.js?v=20261018b"></script>
+<!-- ESCÁNER QR -->
+<div id="scanner" class="scanner hidden">
+  <video id="scanner-video" playsinline muted autoplay></video>
+  <div class="scanner-marco"></div>
+  <p id="scanner-msg">Apunta al código QR</p>
+  <button id="scanner-cerrar">Cerrar</button>
+</div>
+
+<script src="app.js?v=20261018c"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();

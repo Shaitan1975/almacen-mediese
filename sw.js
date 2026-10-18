@@ -6,7 +6,7 @@
 // Al publicar cambios: sube el número de CACHE.
 // ═══════════════════════════════════════════════════════════════════
 
-const CACHE = "almacen-mediese-v3-20261018b";
+const CACHE = "almacen-mediese-v3-20261018c";
 const ARCHIVOS = [
   "./",
   "./index.html",
@@ -15,7 +15,9 @@ const ARCHIVOS = [
   "./styles.css",
   "./manifest.json",
   "./logo.png",
-  "./icono_192x192.png"
+  "./icono_192x192.png",
+  "./jsQR.min.js",
+  "./qrcode.min.js"
 ];
 
 self.addEventListener("install", (e) => {

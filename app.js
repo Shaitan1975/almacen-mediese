@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - FRONTEND v3.1
+// ALMACÉN MEDIESE - FRONTEND v3.2
+// v3.2: escáner QR, búsqueda inteligente, conteo de inventario, etiquetas
 // v3.1: PEPS automático, PU calculado por el servidor, alertas, stock con valor
 // Login en servidor con token (igual que Mantenimiento Mediese)
 // Registro + Dashboard + Stock + Lotes + PEPS + Edición + Usuarios
@@ -230,6 +231,25 @@ const App = (() => {
     on("btn-reconstruir-stock", "click", reconstruirStockManual);
     on("btn-usuarios", "click", verUsuarios);
     on("btn-alertas", "click", verAlertas);
+    on("btn-scan-form", "click", escanearEnFormulario);
+    on("btn-scan-stock", "click", escanearEnStock);
+    on("btn-conteo", "click", abrirConteo);
+    on("btn-conteos", "click", verConteos);
+    on("btn-etiquetas", "click", verEtiquetas);
+    on("btn-scan-ubic", "click", escanearUbicacionConteo);
+    on("btn-scan-conteo", "click", escanearEnConteo);
+    on("btn-mas", "click", () => ajustarCantidad(1));
+    on("btn-menos", "click", () => ajustarCantidad(-1));
+    on("btn-conteo-guardar", "click", guardarConteo);
+    on("btn-conteo-cancelar", "click", cerrarPanelConteo);
+    on("conteo-cantidad", "keydown", (e) => { if (e.key === "Enter") guardarConteo(); });
+    on("btn-cerrar-conteo", "click", volverAlMenu);
+    on("btn-cerrar-conteos", "click", volverAlMenu);
+    on("btn-aplicar-conteos", "click", () => accionConteos("aplicar"));
+    on("btn-descartar-conteos", "click", () => accionConteos("descartar"));
+    on("btn-cerrar-etiquetas", "click", volverAlMenu);
+    on("btn-imprimir-etiquetas", "click", imprimirEtiquetas);
+    on("btn-etiqueta-entrada", "click", imprimirEtiquetaEntrada);
     on("btn-cerrar-alertas", "click", volverAlMenu);
 
     // Formulario de movimiento
@@ -310,7 +330,8 @@ const App = (() => {
     mostrar("btn-reconstruir-stock", usuarioActual.rol === "admin");
     mostrar("btn-usuarios", usuarioActual.rol === "admin");
     mostrar("btn-alertas", sup);
-    if (sup) actualizarBadgeAlertas();
+    mostrar("btn-conteos", sup);
+    if (sup) { actualizarBadgeAlertas(); actualizarBadgeConteos(); }
   }
 
   async function cargarCatalogos() {
@@ -323,7 +344,7 @@ const App = (() => {
   const VISTAS = ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
     "view-lotes", "view-lote-movs", "view-editar-movs", "view-usuarios",
-    "view-usuario-form", "view-password", "view-alertas"];
+    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas"];
 
   function mostrarVista(id) {
     VISTAS.forEach(v => { const el = $(v); if (el) el.classList.add("hidden"); });
@@ -342,7 +363,7 @@ const App = (() => {
     tipoMovimientoActual = null;
     loteActivoEnVista = null;
     mostrarVista("view-menu");
-    if (esSupervisor()) actualizarBadgeAlertas();
+    if (esSupervisor()) { actualizarBadgeAlertas(); actualizarBadgeConteos(); }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -426,11 +447,176 @@ const App = (() => {
     }
   }
 
-  function filtrarCatalogo(query) {
-    return (catalogoCache || []).filter(i =>
-      String(i.codigo).toUpperCase().includes(query) ||
-      String(i.descripcion).toUpperCase().includes(query)
-    ).slice(0, 20);
+  // ═══════════════════════════════════════════════════════════════
+  // BÚSQUEDA INTELIGENTE (igual que Mantenimiento Mediese)
+  // Sin acentos, por palabras en cualquier orden, singular/plural,
+  // y primero lo que coincide con el código y lo que usaste hace poco.
+  // ═══════════════════════════════════════════════════════════════
+
+  function sinAcentos(t) {
+    return String(t || "").toUpperCase().replace(/Ñ/g, "\u0001")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0001/g, "Ñ");
+  }
+  // Para comparar: sin acentos y Ñ = N (así "espanol" encuentra "ESPAÑOL")
+  function plano(t) { return sinAcentos(t).replace(/Ñ/g, "N"); }
+  function palabras(t) {
+    return plano(t).split(/[^A-Z0-9.\/-]+/).filter(w => w.length >= 1);
+  }
+  function variantes(w) {
+    const v = [w];
+    if (w.length > 3 && w.endsWith("ES")) v.push(w.slice(0, -2));
+    if (w.length > 2 && w.endsWith("S")) v.push(w.slice(0, -1));
+    return v;
+  }
+
+  function recientes() { try { return JSON.parse(leerLocal("recientes") || "[]"); } catch (e) { return []; } }
+  function marcarReciente(codigo) {
+    const r = recientes().filter(c => c !== codigo);
+    r.unshift(codigo);
+    guardarLocal("recientes", JSON.stringify(r.slice(0, 15)));
+  }
+
+  function buscarEnCatalogo(q, max) {
+    const ws = palabras(q);
+    if (!ws.length) return [];
+    const qJunto = plano(q).replace(/\s+/g, "");
+    const rec = recientes();
+    return (catalogoCache || []).map(i => {
+      const cod = plano(i.codigo);
+      const texto = cod + " " + cod.replace(/\s+/g, "") + " " + plano(i.descripcion) + " " + plano(i.categoria) + " " + plano(i.proveedor);
+      if (!ws.every(w => variantes(w).some(v => texto.includes(v)))) return null;
+      let pts = 0;
+      if (cod.replace(/\s+/g, "") === qJunto) pts += 100;
+      else if (cod.replace(/\s+/g, "").startsWith(qJunto)) pts += 50;
+      const r = rec.indexOf(i.codigo);
+      if (r >= 0) pts += 20 - r;
+      return { i: i, pts: pts };
+    }).filter(Boolean).sort((a, b) => b.pts - a.pts || String(a.i.codigo).localeCompare(String(b.i.codigo)))
+      .slice(0, max || 20).map(x => x.i);
+  }
+
+  function filtrarCatalogo(query) { return buscarEnCatalogo(query, 20); }
+
+  function insumoPorCodigo(codigo) {
+    const c = sinAcentos(codigo).replace(/\s+/g, "");
+    return (catalogoCache || []).find(i => sinAcentos(i.codigo).replace(/\s+/g, "") === c) || null;
+  }
+
+  function vibrar(ms) { try { if (navigator.vibrate) navigator.vibrate(ms || 60); } catch (e) {} }
+  function guardarLocal(k, v) { try { localStorage.setItem("almacen_" + k, v); } catch (e) {} }
+  function leerLocal(k) { try { return localStorage.getItem("almacen_" + k); } catch (e) { return null; } }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ESCÁNER QR (Android con BarcodeDetector; iPhone y otros con jsQR)
+  // ═══════════════════════════════════════════════════════════════
+
+  function cargarScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector("script[data-lib='" + src + "']")) return resolve();
+      const sc = document.createElement("script");
+      sc.src = src;
+      sc.dataset.lib = src;
+      sc.onload = () => resolve();
+      sc.onerror = () => reject(new Error("No se pudo cargar " + src));
+      document.head.appendChild(sc);
+    });
+  }
+
+  async function escanearQR(texto) {
+    const modal = $("scanner");
+    const video = $("scanner-video");
+    const aviso = $("scanner-msg");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Este navegador no permite usar la cámara. Escribe el código.");
+      return null;
+    }
+    let detector = null;
+    if ("BarcodeDetector" in window) {
+      try {
+        const formatos = await window.BarcodeDetector.getSupportedFormats();
+        if (formatos.includes("qr_code")) detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+      } catch (e) { detector = null; }
+    }
+    if (!detector) {
+      try { await cargarScript("jsQR.min.js"); }
+      catch (e) { alert("No se pudo cargar el lector de QR. Revisa tu conexión."); return null; }
+    }
+
+    return new Promise(async resolve => {
+      let terminado = false, stream = null;
+      const cerrar = (valor) => {
+        if (terminado) return;
+        terminado = true;
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+        modal.classList.add("hidden");
+        resolve(valor);
+      };
+      $("scanner-cerrar").onclick = () => cerrar(null);
+      aviso.textContent = texto || "Apunta al código QR";
+      modal.classList.remove("hidden");
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      } catch (e) {
+        alert("No se pudo abrir la cámara. Permite el acceso a la cámara para este sitio en el navegador.");
+        return cerrar(null);
+      }
+      video.setAttribute("playsinline", "");
+      video.muted = true;
+      video.srcObject = stream;
+      try { await video.play(); } catch (e) { /* algunos iPhone requieren el toque inicial */ }
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const leer = window.jsQR ? (window.jsQR.default || window.jsQR) : null;
+      const ciclo = async () => {
+        if (terminado) return;
+        if (video.readyState >= 2 && video.videoWidth) {
+          try {
+            if (detector) {
+              const r = await detector.detect(video);
+              if (r && r.length) { vibrar(80); return cerrar(r[0].rawValue); }
+            } else if (leer) {
+              const escala = Math.min(1, 640 / video.videoWidth);
+              canvas.width = Math.round(video.videoWidth * escala);
+              canvas.height = Math.round(video.videoHeight * escala);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const r = leer(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+              if (r && r.data) { vibrar(80); return cerrar(r.data); }
+            }
+          } catch (e) { /* sigue intentando */ }
+        }
+        setTimeout(ciclo, 160);
+      };
+      ciclo();
+    });
+  }
+
+  // Etiquetas del almacén:
+  //   "ALM|MPH0009|L-101" → insumo + lote     "ALM|MPH0009" → insumo
+  //   "UBI:ALMACEN_MP"    → ubicación         otro texto     → código de insumo
+  function interpretarQR(txt) {
+    const t = String(txt || "").trim();
+    const T = t.toUpperCase();
+    if (T.indexOf("UBI:") === 0) return { tipo: "ubicacion", valor: T.slice(4).trim() };
+    if (T.indexOf("ALM|") === 0) {
+      const p = t.split("|");
+      return { tipo: "insumo", codigo: (p[1] || "").trim(), lote: (p[2] || "").trim().toUpperCase() };
+    }
+    return { tipo: "insumo", codigo: t, lote: "" };
+  }
+
+  // Escanea y devuelve { insumo, lote } o null (avisa si no sirve)
+  async function escanearInsumo() {
+    const txt = await escanearQR("Apunta a la etiqueta del insumo o lote");
+    if (!txt) return null;
+    const q = interpretarQR(txt);
+    if (q.tipo === "ubicacion") { alert("Esa es la etiqueta de una ubicación. Escanea la del insumo o lote."); return null; }
+    if (!catalogoCache) await cargarCatalogos();
+    const insumo = insumoPorCodigo(q.codigo);
+    if (!insumo) { alert("Esa etiqueta no corresponde a un insumo activo: " + q.codigo); return null; }
+    return { insumo: insumo, lote: q.lote };
   }
 
   function pintarResultadosInsumo(contenedor, lista, alElegir) {
@@ -461,8 +647,17 @@ const App = (() => {
     pintarResultadosInsumo(resultados, filtrarCatalogo(query), seleccionarInsumo);
   }
 
-  function seleccionarInsumo(insumo) {
+  async function escanearEnFormulario() {
+    const r = await escanearInsumo();
+    if (!r) return;
+    seleccionarInsumo(r.insumo, r.lote);
+    if (tipoMovimientoActual === "ENTRADA" && r.lote) $("lote-insumo-input").value = r.lote;
+    $("cantidad").focus();
+  }
+
+  function seleccionarInsumo(insumo, lotePreferido) {
     insumoSeleccionado = insumo;
+    marcarReciente(insumo.codigo);
     $("buscar-insumo").value = insumo.codigo + " - " + insumo.descripcion;
     $("resultados-busqueda").classList.add("hidden");
     $("info-codigo").textContent = insumo.codigo;
@@ -479,14 +674,14 @@ const App = (() => {
     }
 
     consultarStockInsumo(insumo.codigo);
-    if (tipoMovimientoActual !== "ENTRADA") cargarLotesDisponibles(insumo.codigo);
+    if (tipoMovimientoActual !== "ENTRADA") cargarLotesDisponibles(insumo.codigo, lotePreferido);
   }
 
   // ═══════════════════════════════════════════════════════════════
   // LOTES DISPONIBLES (PEPS)
   // ═══════════════════════════════════════════════════════════════
 
-  async function cargarLotesDisponibles(codigo) {
+  async function cargarLotesDisponibles(codigo, lotePreferido) {
     const select = $("lote-insumo");
     const infoPanel = $("info-lote-insumo");
     const esDevolucion = tipoMovimientoActual === "DEVOLUCION";
@@ -520,6 +715,11 @@ const App = (() => {
       select.appendChild(opt);
     });
     select.dataset.lotes = JSON.stringify(lotes);
+    if (lotePreferido) {
+      const o = Array.from(select.options).find(x => x.value.toUpperCase() === String(lotePreferido).toUpperCase());
+      if (o) select.value = o.value;
+      else alert("El lote " + lotePreferido + " no tiene saldo de este insumo. Revisa la etiqueta.");
+    }
     onLoteInsumoChange();
   }
 
@@ -634,7 +834,14 @@ const App = (() => {
     }
   }
 
+  let ultimaEntrada = null;
+
   function mostrarExito(resp, cantidad) {
+    ultimaEntrada = tipoMovimientoActual === "ENTRADA"
+      ? { codigo: insumoSeleccionado.codigo, descripcion: insumoSeleccionado.descripcion, unidad: insumoSeleccionado.unidad,
+          lote: (resp.asignaciones && resp.asignaciones[0] ? resp.asignaciones[0].lote : resp.lote_insumo), fecha: resp.fecha, cantidad: cantidad }
+      : null;
+    $("btn-etiqueta-entrada").classList.toggle("hidden", !ultimaEntrada);
     $("exito-id").textContent = (resp.ids && resp.ids.length > 1) ? resp.ids.join(", ") : (resp.id_movimiento || "-");
     const rep = $("exito-reparto");
     if (resp.asignaciones && resp.asignaciones.length) {
@@ -807,13 +1014,19 @@ const App = (() => {
   }
 
   function filtrarStock() {
-    const q = $("stock-buscar").value.trim().toUpperCase();
-    if (!q) { renderizarStock(stockCache); return; }
-    renderizarStock(stockCache.filter(item =>
-      String(item.codigo).toUpperCase().includes(q) ||
-      String(item.descripcion).toUpperCase().includes(q) ||
-      String(item.lote).toUpperCase().includes(q)
-    ));
+    const ws = palabras($("stock-buscar").value);
+    if (!ws.length) { renderizarStock(stockCache); return; }
+    renderizarStock(stockCache.filter(item => {
+      const t = plano(item.codigo + " " + item.descripcion + " " + item.lote + " " + item.ubicacion);
+      return ws.every(w => variantes(w).some(v => t.includes(v)));
+    }));
+  }
+
+  async function escanearEnStock() {
+    const r = await escanearInsumo();
+    if (!r) return;
+    $("stock-buscar").value = r.insumo.codigo + (r.lote ? " " + r.lote : "");
+    filtrarStock();
   }
 
   function tarjetasResumen(datos) {
@@ -1338,6 +1551,387 @@ const App = (() => {
       cont.appendChild(card);
     });
     mostrarVista("view-lote-movs");
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONTEO DE INVENTARIO (igual que Mantenimiento Mediese, pero por lote)
+  // ═══════════════════════════════════════════════════════════════
+
+  const conteo = { item: null, resumen: null, ubicaciones: [], lotes: [] };
+
+  function difHtml(d) {
+    const n = Number(d) || 0;
+    if (n > 0) return '<span class="dif-pos">+' + esc(fmtNum(n)) + '</span>';
+    if (n < 0) return '<span class="dif-neg">' + esc(fmtNum(n)) + '</span>';
+    return '<span class="dif-cero">sin diferencia</span>';
+  }
+
+  async function abrirConteo() {
+    cargando("Preparando conteo...");
+    if (!catalogoCache) await cargarCatalogos();
+    const ru = await api("listar_ubicaciones");
+    conteo.ubicaciones = (ru.ok ? ru.ubicaciones : []).filter(u => u.tipo === "ALMACEN");
+    const sel = $("conteo-ubicacion");
+    sel.innerHTML = "";
+    conteo.ubicaciones.forEach(u => sel.appendChild(new Option(u.nombre, u.codigo)));
+    const ultima = leerLocal("ubicacion_conteo");
+    if (ultima && conteo.ubicaciones.some(u => u.codigo === ultima)) sel.value = ultima;
+    sel.onchange = () => { guardarLocal("ubicacion_conteo", sel.value); cerrarPanelConteo(); cargarResumenConteo(); };
+    const buscar = $("conteo-buscar");
+    buscar.value = "";
+    buscar.oninput = renderResultadosConteo;
+    $("conteo-resultados").innerHTML = "";
+    cerrarPanelConteo();
+    mostrarVista("view-conteo");
+    cargarResumenConteo();
+  }
+
+  async function cargarResumenConteo() {
+    const ubic = $("conteo-ubicacion").value;
+    const lista = $("conteo-lista");
+    lista.innerHTML = '<p class="vacio">Cargando...</p>';
+    const r = await api("resumen_conteo", { ubicacion: ubic });
+    if (ubic !== $("conteo-ubicacion").value) return;    // cambió mientras cargaba
+    if (!r.ok) { lista.innerHTML = '<p class="vacio error">' + esc(r.error) + '</p>'; return; }
+    conteo.resumen = r;
+    renderResumenConteo();
+  }
+
+  const claveCL = (cod, lote) => sinAcentos(cod).replace(/\s+/g, "") + "|" + String(lote || "").toUpperCase();
+
+  function renderResumenConteo() {
+    const r = conteo.resumen;
+    if (!r) return;
+    const lista = $("conteo-lista");
+    const contados = new Set(r.conteos.map(c => claveCL(c.codigo, c.lote)));
+    lista.innerHTML = r.conteos.length ? "" : '<p class="vacio">Todavía no hay nada contado hoy en esta ubicación.</p>';
+    r.conteos.forEach(c => {
+      const d = document.createElement("div");
+      d.className = "item-toque";
+      d.innerHTML =
+        '<div><span class="cod">' + esc(c.codigo) + '</span>' + (c.lote ? ' · ' + esc(c.lote) : '') +
+        ' · <b>' + esc(fmtNum(c.cantidad)) + ' ' + esc(c.unidad) + '</b> · ' + difHtml(c.diferencia) + '</div>' +
+        '<div class="sub">' + esc(c.descripcion) + '</div>' +
+        '<div class="sub">' + esc(c.hora.slice(0, 5)) + ' · ' + esc(c.nombre_usuario || c.usuario) + ' · ' + esc(c.estado.toLowerCase()) + '</div>';
+      d.onclick = () => { const p = insumoPorCodigo(c.codigo); if (p) seleccionarInsumoConteo(p, c.lote); };
+      lista.appendChild(d);
+    });
+
+    const faltan = r.sistema.filter(x => !contados.has(claveCL(x.codigo, x.lote)));
+    $("conteo-faltan-n").textContent = faltan.length;
+    const total = r.sistema.length + r.conteos.filter(c => !r.sistema.some(x => claveCL(x.codigo, x.lote) === claveCL(c.codigo, c.lote))).length;
+    $("conteo-avance").textContent = total ? "(" + r.conteos.length + " de " + total + ")" : "";
+    const cf = $("conteo-faltan");
+    cf.innerHTML = faltan.length ? "" : '<p class="vacio">Nada pendiente. 👍</p>';
+    faltan.forEach(x => {
+      const d = document.createElement("div");
+      d.className = "item-toque";
+      d.innerHTML = '<div><span class="cod">' + esc(x.codigo) + '</span>' + (x.lote ? ' · ' + esc(x.lote) : '') +
+        ' · sistema: ' + esc(fmtNum(x.saldo)) + ' ' + esc(x.unidad) + '</div><div class="sub">' + esc(x.descripcion) + '</div>';
+      d.onclick = () => { const p = insumoPorCodigo(x.codigo); if (p) seleccionarInsumoConteo(p, x.lote); };
+      cf.appendChild(d);
+    });
+  }
+
+  function renderResultadosConteo() {
+    const q = $("conteo-buscar").value;
+    const cont = $("conteo-resultados");
+    cont.innerHTML = "";
+    if (!palabras(q).length) return;
+    const res = buscarEnCatalogo(q, 8);
+    if (!res.length) { cont.innerHTML = '<p class="vacio">No encontré ese insumo en el catálogo.</p>'; return; }
+    res.forEach(p => {
+      const d = document.createElement("div");
+      d.className = "item-toque";
+      d.innerHTML = '<div class="cod">' + esc(p.codigo) + '</div><div class="sub">' + esc(p.descripcion) + '</div>';
+      d.onclick = () => seleccionarInsumoConteo(p, "");
+      cont.appendChild(d);
+    });
+  }
+
+  async function seleccionarInsumoConteo(p, lotePreferido) {
+    conteo.item = p;
+    marcarReciente(p.codigo);
+    $("conteo-codigo").textContent = p.codigo;
+    $("conteo-desc").textContent = p.descripcion;
+    $("conteo-unidad").textContent = p.unidad || "";
+    $("conteo-cantidad").value = "";
+    $("conteo-notas").value = "";
+    msg($("conteo-status"), "");
+    $("conteo-buscador").classList.add("hidden");
+    $("conteo-panel").classList.remove("hidden");
+
+    const sel = $("conteo-lote");
+    sel.innerHTML = '<option value="">Cargando lotes...</option>';
+    const r = await api("lotes_disponibles", { codigo: p.codigo });
+    conteo.lotes = r.ok ? r.lotes : [];
+    sel.innerHTML = "";
+    conteo.lotes.forEach(l => sel.appendChild(new Option(l.lote + " · sistema " + fmtNum(l.saldo) + " " + (l.unidad || p.unidad), l.lote)));
+    sel.appendChild(new Option(conteo.lotes.length ? "Otro lote (no aparece)..." : "Sin lote / lote nuevo...", "__OTRO__"));
+    if (lotePreferido) {
+      const o = Array.from(sel.options).find(x => x.value.toUpperCase() === String(lotePreferido).toUpperCase());
+      if (o) sel.value = o.value;
+      else { sel.value = "__OTRO__"; $("conteo-lote-otro").value = lotePreferido; }
+    }
+    sel.onchange = actualizarLoteConteo;
+    actualizarLoteConteo();
+    $("conteo-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => $("conteo-cantidad").focus(), 250);
+  }
+
+  function loteConteoActual() {
+    const v = $("conteo-lote").value;
+    return v === "__OTRO__" ? $("conteo-lote-otro").value.trim().toUpperCase() : v;
+  }
+
+  function actualizarLoteConteo() {
+    const otro = $("conteo-lote").value === "__OTRO__";
+    $("conteo-lote-otro").classList.toggle("hidden", !otro);
+    const lote = loteConteoActual();
+    const enSis = conteo.lotes.find(l => l.lote === lote);
+    const ya = conteo.resumen && conteo.resumen.conteos.find(c => conteo.item && claveCL(c.codigo, c.lote) === claveCL(conteo.item.codigo, lote));
+    $("conteo-info").textContent = "En sistema: " + fmtNum(enSis ? enSis.saldo : 0) + " " + (conteo.item.unidad || "") +
+      (ya ? "  ·  Hoy ya contaste " + fmtNum(ya.cantidad) + " (se corregirá)" : "");
+  }
+
+  function cerrarPanelConteo() {
+    conteo.item = null;
+    $("conteo-panel").classList.add("hidden");
+    $("conteo-buscador").classList.remove("hidden");
+  }
+
+  function ajustarCantidad(delta) {
+    const inp = $("conteo-cantidad");
+    inp.value = Math.round(Math.max(0, (Number(inp.value) || 0) + delta) * 1000) / 1000;
+  }
+
+  async function guardarConteo() {
+    const st = $("conteo-status");
+    const p = conteo.item;
+    if (!p) return;
+    const txt = $("conteo-cantidad").value;
+    const cant = Number(txt);
+    if (txt === "" || !isFinite(cant) || cant < 0) return msg(st, "❌ Escribe cuánto hay (0 si no hay nada)", "error");
+    const lote = loteConteoActual();
+    if ($("conteo-lote").value === "__OTRO__" && !lote && conteo.lotes.length) return msg(st, "❌ Escribe el lote", "error");
+    if (cant === 0 && !confirm("¿Confirmas que NO hay nada de " + p.codigo + (lote ? " lote " + lote : "") + " en esta ubicación?")) return;
+
+    const btn = $("btn-conteo-guardar");
+    btn.disabled = true;
+    msg(st, "Guardando...");
+    try {
+      const r = await api("registrar_conteo", {
+        ubicacion: $("conteo-ubicacion").value, codigo: p.codigo, lote: lote,
+        cantidad: cant, notas: $("conteo-notas").value.trim(),
+      }, "POST");
+      if (!r.ok) return msg(st, "❌ " + r.error, "error");
+      vibrar(60);
+      $("conteo-buscar").value = "";
+      $("conteo-resultados").innerHTML = '<div class="aviso-ok">✅ ' + esc(p.codigo) + (r.lote ? ' · ' + esc(r.lote) : '') + ': ' +
+        esc(fmtNum(r.cantidad)) + ' ' + esc(r.unidad) + ' · ' + difHtml(r.diferencia) + (r.corregido ? ' (corregido)' : '') + '</div>';
+      cerrarPanelConteo();
+      cargarResumenConteo();
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function escanearEnConteo() {
+    const txt = await escanearQR("Apunta a la etiqueta del lote o de la ubicación");
+    if (!txt) return;
+    const q = interpretarQR(txt);
+    if (q.tipo === "ubicacion") return cambiarUbicacionConteo(q.valor);
+    const p = insumoPorCodigo(q.codigo);
+    if (!p) return alert("Esa etiqueta no corresponde a un insumo activo: " + q.codigo);
+    seleccionarInsumoConteo(p, q.lote);
+  }
+
+  async function escanearUbicacionConteo() {
+    const txt = await escanearQR("Apunta a la etiqueta de la ubicación");
+    if (!txt) return;
+    const q = interpretarQR(txt);
+    if (q.tipo !== "ubicacion") return alert("Esa no es una etiqueta de ubicación.");
+    cambiarUbicacionConteo(q.valor);
+  }
+
+  function cambiarUbicacionConteo(codigo) {
+    const u = conteo.ubicaciones.find(x => x.codigo === String(codigo).toUpperCase());
+    if (!u) return alert("Ubicación no registrada: " + codigo);
+    $("conteo-ubicacion").value = u.codigo;
+    guardarLocal("ubicacion_conteo", u.codigo);
+    cerrarPanelConteo();
+    cargarResumenConteo();
+  }
+
+  // ── Revisión de conteos (supervisor) ──
+
+  async function actualizarBadgeConteos() {
+    const r = await api("listar_conteos", { estado: "PENDIENTE" });
+    const b = $("badge-conteos");
+    if (!b || !r.ok) return;
+    b.textContent = r.pendientes ? String(r.pendientes) : "";
+    b.classList.toggle("hidden", !r.pendientes);
+  }
+
+  async function verConteos() {
+    cargando("Cargando conteos...");
+    const r = await api("listar_conteos", { estado: "PENDIENTE" });
+    if (!r.ok) { alert("Error: " + r.error); return volverAlMenu(); }
+    const cont = $("lista-conteos");
+    cont.innerHTML = r.conteos.length ? "" : '<p class="vacio">✅ No hay conteos por aplicar.</p>';
+    $("conteos-acciones").classList.toggle("hidden", !r.conteos.length);
+    r.conteos.forEach(c => {
+      const d = document.createElement("label");
+      d.className = "item-toque check-fila";
+      d.innerHTML = '<input type="checkbox" class="chk-conteo" value="' + esc(c.id) + '"' + (c.diferencia === 0 ? " checked" : "") + '>' +
+        '<div style="flex:1">' +
+        '<div><span class="cod">' + esc(c.codigo) + '</span>' + (c.lote ? ' · ' + esc(c.lote) : '') + ' · ' + esc(c.ubicacion) + '</div>' +
+        '<div class="sub">' + esc(c.descripcion) + '</div>' +
+        '<div>Contado <b>' + esc(fmtNum(c.cantidad)) + '</b> · sistema ' + esc(fmtNum(c.saldo_sistema)) + ' ' + esc(c.unidad) + ' · ' + difHtml(c.diferencia) + '</div>' +
+        '<div class="sub">' + esc(c.fecha) + ' ' + esc(c.hora.slice(0, 5)) + ' · ' + esc(c.nombre_usuario || c.usuario) + '</div>' +
+        (c.notas ? '<div class="sub">📝 ' + esc(c.notas) + '</div>' : '') + '</div>';
+      cont.appendChild(d);
+    });
+    mostrarVista("view-conteos");
+  }
+
+  async function accionConteos(accion) {
+    const ids = Array.from(document.querySelectorAll(".chk-conteo:checked")).map(c => c.value);
+    if (!ids.length) return alert("Selecciona al menos un conteo.");
+    if (accion === "aplicar") {
+      if (!confirm("¿Aplicar " + ids.length + " conteo(s)?\n\nEl stock de cada lote quedará igual a lo contado (se crea un movimiento de ajuste).")) return;
+      const r = await api("aplicar_conteos", { ids: ids }, "POST");
+      alert(r.ok ? "✅ " + r.mensaje : "Error: " + r.error);
+    } else {
+      if (!confirm("¿Descartar " + ids.length + " conteo(s)? No se moverá el stock.")) return;
+      const r = await api("descartar_conteos", { ids: ids }, "POST");
+      if (!r.ok) alert("Error: " + r.error);
+    }
+    verConteos();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ETIQUETAS QR (lotes, insumos y ubicaciones)
+  // ═══════════════════════════════════════════════════════════════
+
+  const etiquetas = { modo: "lotes", seleccion: new Set(), lotes: [], ubicaciones: [] };
+
+  async function verEtiquetas() {
+    cargando("Cargando...");
+    if (!catalogoCache) await cargarCatalogos();
+    const [rs, ru] = await Promise.all([api("listar_stock"), api("listar_ubicaciones")]);
+    etiquetas.lotes = (rs.ok ? rs.items : []).filter(i => i.saldo > 0 && i.lote && i.lote !== "SIN_LOTE");
+    etiquetas.ubicaciones = ru.ok ? ru.ubicaciones : [];
+    $("et-buscar").value = "";
+    $("et-buscar").oninput = renderEtiquetas;
+    $("et-copias").value = "1";
+    document.querySelectorAll("#et-tabs [data-modo]").forEach(b => { b.onclick = () => cambiarModoEtiquetas(b.dataset.modo); });
+    $("et-todas").onchange = (e) => {
+      itemsEtiquetasVisibles().forEach(it => { if (e.target.checked) etiquetas.seleccion.add(it.qr); else etiquetas.seleccion.delete(it.qr); });
+      renderEtiquetas();
+    };
+    cambiarModoEtiquetas("lotes");
+    mostrarVista("view-etiquetas");
+  }
+
+  function cambiarModoEtiquetas(modo) {
+    etiquetas.modo = modo;
+    etiquetas.seleccion = new Set();
+    document.querySelectorAll("#et-tabs [data-modo]").forEach(b => b.classList.toggle("activo", b.dataset.modo === modo));
+    renderEtiquetas();
+  }
+
+  // Lista uniforme: { qr, titulo, sub, extra }
+  function itemsEtiquetasTodos() {
+    if (etiquetas.modo === "ubicaciones") {
+      return etiquetas.ubicaciones.map(u => ({ qr: "UBI:" + u.codigo, titulo: u.codigo, sub: u.nombre, extra: "Ubicación" }));
+    }
+    if (etiquetas.modo === "insumos") {
+      return (catalogoCache || []).map(i => ({ qr: "ALM|" + i.codigo, titulo: i.codigo, sub: i.descripcion, extra: [i.unidad, i.ubicacion].filter(Boolean).join(" · ") }));
+    }
+    return etiquetas.lotes.map(l => ({
+      qr: "ALM|" + l.codigo + "|" + l.lote, titulo: l.codigo, sub: l.descripcion,
+      extra: "LOTE " + l.lote + (l.primera_entrada ? " · Entrada " + l.primera_entrada : ""),
+    }));
+  }
+
+  function itemsEtiquetasVisibles() {
+    const ws = palabras($("et-buscar").value);
+    return itemsEtiquetasTodos().filter(it => {
+      const t = plano(it.titulo + " " + it.sub + " " + it.extra);
+      return ws.every(w => variantes(w).some(v => t.includes(v)));
+    });
+  }
+
+  function renderEtiquetas() {
+    const items = itemsEtiquetasVisibles();
+    const cont = $("lista-etiquetas");
+    cont.innerHTML = items.length ? "" : '<p class="vacio">No hay nada con ese filtro.</p>';
+    items.slice(0, 300).forEach(it => {
+      const d = document.createElement("label");
+      d.className = "item-toque check-fila";
+      d.innerHTML = '<input type="checkbox"' + (etiquetas.seleccion.has(it.qr) ? " checked" : "") + '>' +
+        '<div><div class="cod">' + esc(it.titulo) + '</div><div class="sub">' + esc(it.sub) + '</div><div class="sub">' + esc(it.extra) + '</div></div>';
+      d.querySelector("input").onchange = (e) => {
+        if (e.target.checked) etiquetas.seleccion.add(it.qr); else etiquetas.seleccion.delete(it.qr);
+        actualizarBotonImprimir();
+      };
+      cont.appendChild(d);
+    });
+    if (items.length > 300) cont.insertAdjacentHTML("beforeend", '<p class="vacio">Mostrando 300 de ' + items.length + '. Filtra para ver otras.</p>');
+    $("et-todas").checked = items.length > 0 && items.every(it => etiquetas.seleccion.has(it.qr));
+    actualizarBotonImprimir();
+  }
+
+  function actualizarBotonImprimir() {
+    $("btn-imprimir-etiquetas").textContent = "🖨️ Imprimir (" + etiquetas.seleccion.size + ")";
+  }
+
+  function imprimirEtiquetas() {
+    const items = itemsEtiquetasTodos().filter(it => etiquetas.seleccion.has(it.qr));
+    if (!items.length) return alert("Selecciona al menos una etiqueta.");
+    abrirHojaEtiquetas(items, Math.max(1, Math.min(50, parseInt($("et-copias").value, 10) || 1)));
+  }
+
+  function imprimirEtiquetaEntrada() {
+    const e = ultimaEntrada;
+    if (!e || !e.lote) return;
+    const copias = prompt("¿Cuántas etiquetas del lote " + e.lote + "?\n(una por saco, caja o tarima)", "1");
+    if (copias === null) return;
+    abrirHojaEtiquetas([{
+      qr: "ALM|" + e.codigo + "|" + e.lote, titulo: e.codigo, sub: e.descripcion,
+      extra: "LOTE " + e.lote + " · Entrada " + (e.fecha || ""),
+    }], Math.max(1, Math.min(200, parseInt(copias, 10) || 1)));
+  }
+
+  async function abrirHojaEtiquetas(items, copias) {
+    const w = window.open("", "_blank");
+    if (!w) return alert("Permite las ventanas emergentes de este sitio para imprimir.");
+    try { await cargarScript("qrcode.min.js"); }
+    catch (e) { w.close(); return alert("No se pudo cargar el generador de QR. Revisa tu conexión."); }
+
+    const una = it => {
+      const q = window.qrcode(0, "M");
+      q.addData(it.qr);
+      q.make();
+      return '<div class="et"><div class="qr">' + q.createSvgTag({ cellSize: 3, margin: 0, scalable: true }) + '</div>' +
+        '<div class="tx"><div class="cod">' + esc(it.titulo) + '</div><div class="desc">' + esc(it.sub) + '</div>' +
+        '<div class="ext">' + esc(it.extra) + '</div></div></div>';
+    };
+    const html = items.map(it => una(it).repeat(copias)).join("");
+    const total = items.length * copias;
+    w.document.write("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+      "<title>Etiquetas QR - Almacén Mediese</title><style>" +
+      "@page{size:letter;margin:10mm} body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000}" +
+      ".barra{padding:10px;background:#f1f5f9;font-size:14px} .barra button{font-size:16px;padding:8px 16px;margin-right:8px}" +
+      ".hoja{display:grid;grid-template-columns:repeat(3,62mm);gap:3mm 4mm;padding:2mm}" +
+      ".et{height:32mm;border:1px dashed #999;display:flex;gap:2mm;padding:2mm;box-sizing:border-box;overflow:hidden;break-inside:avoid;page-break-inside:avoid}" +
+      ".qr{width:27mm;height:27mm;flex:none} .qr svg{width:100%;height:100%;display:block}" +
+      ".tx{min-width:0} .cod{font-weight:bold;font-size:11pt;word-break:break-all} .desc{font-size:7.5pt;line-height:1.15;max-height:14mm;overflow:hidden;margin-top:1mm}" +
+      ".ext{font-size:8pt;font-weight:bold;margin-top:1mm} @media print{.barra{display:none} .et{border-color:#ddd}}" +
+      "</style></head><body><div class='barra'><button onclick='window.print()'>🖨️ Imprimir</button>" + total +
+      " etiquetas · Papel carta, escala 100%</div><div class='hoja'>" + html + "</div></body></html>");
+    w.document.close();
   }
 
   // ═══════════════════════════════════════════════════════════════
