@@ -7,90 +7,48 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261018c">
+<link rel="stylesheet" href="styles.css?v=20261018d">
 </head>
 <body class="app-body">
 
 <header class="app-header">
   <div class="header-left">
     <img src="logo.png" alt="Logo" class="header-logo-img">
-    <span class="header-title">Almacén Mediese</span>
+    <div class="header-textos">
+      <span class="header-title">Almacén Mediese</span>
+      <span id="user-info" class="user-info"></span>
+    </div>
   </div>
   <div class="header-right">
-    <span id="user-info" class="user-info"></span>
-    <button id="btn-mi-pass" class="btn-logout" title="Cambiar mi contraseña">🔑</button>
+    <button id="btn-mi-pass" class="btn-logout" title="Cambiar mi contraseña">🔑 Contraseña</button>
     <button id="btn-logout" class="btn-logout">Salir</button>
   </div>
 </header>
 
 <main class="app-main">
 
-  <!-- Vista: MENÚ PRINCIPAL -->
+  <!-- Vista: MENÚ PRINCIPAL (mismo orden y nombres que Mantenimiento Mediese) -->
   <section id="view-menu" class="view-section hidden">
     <div class="menu-container">
-      <h2 class="menu-titulo">¿Qué deseas registrar?</h2>
-      <p class="menu-descripcion">Selecciona el tipo de movimiento</p>
-
-      <div class="menu-botones">
-        <button id="btn-entrada" class="menu-btn menu-btn-entrada">
-          <span class="menu-btn-icono">📥</span>
-          <span class="menu-btn-texto">ENTRADA</span>
-          <span class="menu-btn-desc">Recibo de material</span>
-        </button>
-        <button id="btn-salida" class="menu-btn menu-btn-salida">
-          <span class="menu-btn-icono">📤</span>
-          <span class="menu-btn-texto">SALIDA</span>
-          <span class="menu-btn-desc">Consumo a producción</span>
-        </button>
-        <button id="btn-devolucion" class="menu-btn menu-btn-devolucion">
-          <span class="menu-btn-icono">🔄</span>
-          <span class="menu-btn-texto">DEVOLUCIÓN</span>
-          <span class="menu-btn-desc">Retorno de sobrantes</span>
-        </button>
+      <h2 class="menu-titulo">Menú</h2>
+      <div class="menu-grid">
+        <button id="btn-conteo" class="tile tile-ancho tile-conteo">📦 Contar inventario</button>
+        <button id="btn-salida" class="tile tile-salida">➖ Salida<small>Consumo a producción</small></button>
+        <button id="btn-devolucion" class="tile tile-devolucion">↩️ Devolución<small>Retorno de sobrantes</small></button>
+        <button id="btn-ver-stock" class="tile tile-stock">🔍 Ver stock</button>
+        <button id="btn-entrada" class="tile tile-entrada">➕ Entrada<small>Recibo de material</small></button>
+        <button id="btn-ver-historial" class="tile">🕒 Mis movimientos de hoy</button>
+        <button id="btn-ver-lotes" class="tile tile-lotes">🏭 Lotes de trabajo</button>
+        <button id="btn-abrir-lote" class="tile tile-abrir hidden">🆕 Abrir lote</button>
+        <button id="btn-cerrar-lote" class="tile tile-cerrar hidden">✅ Cerrar lote</button>
+        <button id="btn-dashboard" class="tile tile-mov hidden">📋 Movimientos</button>
+        <button id="btn-editar-movs" class="tile tile-alerta hidden">✏️ Corregir movimientos</button>
+        <button id="btn-alertas" class="tile tile-alerta hidden">🔔 Alertas stock <span id="badge-alertas" class="badge hidden"></span></button>
+        <button id="btn-conteos" class="tile tile-conteos hidden">🧮 Conteos <span id="badge-conteos" class="badge hidden"></span></button>
+        <button id="btn-etiquetas" class="tile">🏷️ Etiquetas QR</button>
+        <button id="btn-usuarios" class="tile tile-admin hidden">👥 Usuarios</button>
+        <button id="btn-reconstruir-stock" class="tile tile-admin hidden">♻️ Reconstruir stock</button>
       </div>
-
-      <div class="menu-botones-lotes hidden" id="menu-botones-lotes">
-        <button id="btn-abrir-lote" class="menu-btn menu-btn-lote">
-          <span class="menu-btn-icono">🆕</span>
-          <span class="menu-btn-texto">ABRIR LOTE</span>
-          <span class="menu-btn-desc">Iniciar lote de trabajo</span>
-        </button>
-        <button id="btn-cerrar-lote" class="menu-btn menu-btn-cerrar">
-          <span class="menu-btn-icono">✅</span>
-          <span class="menu-btn-texto">CERRAR LOTE</span>
-          <span class="menu-btn-desc">Terminar lote (con producción)</span>
-        </button>
-      </div>
-
-      <button id="btn-conteo" class="btn-secondary" style="background: #ECFEFF; color: #0E7490; border-color: #A5F3FC;">
-        🧮 Contar inventario
-      </button>
-      <button id="btn-conteos" class="btn-secondary hidden" style="background: #ECFEFF; color: #0E7490; border-color: #A5F3FC;">
-        📋 Conteos por aplicar <span id="badge-conteos" class="badge hidden"></span>
-      </button>
-      <button id="btn-etiquetas" class="btn-secondary">🏷️ Etiquetas QR</button>
-      <button id="btn-ver-stock" class="btn-secondary" style="background: #F0FDF4; color: #15803D; border-color: #BBF7D0;">
-        📦 Ver Stock Actual
-      </button>
-      <button id="btn-ver-lotes" class="btn-secondary" style="background: #FEF3C7; color: #92400E; border-color: #FDE68A;">
-        📋 Ver Lotes de Trabajo
-      </button>
-      <button id="btn-alertas" class="btn-secondary hidden" style="background: #FEF2F2; color: #B91C1C; border-color: #FECACA;">
-        ⚠️ Alertas de stock <span id="badge-alertas" class="badge hidden"></span>
-      </button>
-      <button id="btn-editar-movs" class="btn-secondary hidden" style="background: #FEF2F2; color: #991B1B; border-color: #FECACA;">
-        ✏️ Editar Movimientos
-      </button>
-      <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
-      <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
-        📊 Dashboard (Supervisor / Gerencia)
-      </button>
-      <button id="btn-usuarios" class="btn-secondary hidden" style="background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE;">
-        👥 Usuarios (Admin)
-      </button>
-      <button id="btn-reconstruir-stock" class="btn-secondary hidden" style="background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE;">
-        🔄 Reconstruir Stock (Admin)
-      </button>
     </div>
   </section>
 
@@ -185,7 +143,7 @@
     <div class="stock-container">
       <div class="form-header">
         <button id="btn-cerrar-editar-movs" class="btn-cerrar">✖</button>
-        <h2>✏️ Editar Movimientos</h2>
+        <h2>✏️ Corregir movimientos</h2>
       </div>
 
       <p style="font-size:13px; color:#666; margin-bottom:10px;">
@@ -202,6 +160,7 @@
 
       <div id="editar-movs-resumen" class="stock-resumen" style="margin-top:15px;"></div>
       <div id="lista-editar-movs" class="lista-movimientos"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -301,9 +260,10 @@
     <div class="historial-container">
       <div class="form-header">
         <button id="btn-cerrar-historial" class="btn-cerrar">✖</button>
-        <h2>📊 Mis Movimientos de Hoy</h2>
+        <h2>🕒 Mis movimientos de hoy</h2>
       </div>
       <div id="lista-movimientos" class="lista-movimientos"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -312,7 +272,7 @@
     <div class="dashboard-container">
       <div class="form-header">
         <button id="btn-cerrar-dashboard" class="btn-cerrar">✖</button>
-        <h2>📊 Dashboard de Movimientos</h2>
+        <h2>📋 Movimientos</h2>
       </div>
       <div id="resumen-dia" class="resumen-grid"></div>
       <div class="filtros-container">
@@ -333,6 +293,7 @@
       </div>
       <button id="btn-aplicar-filtros" class="btn-primary">🔍 Aplicar filtros</button>
       <div id="lista-dashboard" class="lista-movimientos" style="margin-top: 20px;"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -341,7 +302,7 @@
     <div class="stock-container">
       <div class="form-header">
         <button id="btn-cerrar-stock" class="btn-cerrar">✖</button>
-        <h2>📦 Stock Actual</h2>
+        <h2>🔍 Stock actual</h2>
       </div>
       <div class="stock-buscador">
         <div class="fila-scan">
@@ -351,6 +312,7 @@
       </div>
       <div id="stock-resumen" class="stock-resumen"></div>
       <div id="lista-stock" class="lista-stock"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -359,7 +321,7 @@
     <div class="stock-container">
       <div class="form-header">
         <button id="btn-cerrar-lotes" class="btn-cerrar">✖</button>
-        <h2>📋 Lotes de Trabajo</h2>
+        <h2>🏭 Lotes de trabajo</h2>
       </div>
       <div class="stock-buscador">
         <input type="text" id="lotes-buscar" placeholder="🔍 Buscar por lote, código OAR o descripción...">
@@ -376,6 +338,7 @@
       </div>
       <div id="lotes-resumen" class="stock-resumen"></div>
       <div id="lista-lotes" class="lista-stock"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -429,7 +392,7 @@
     <div class="form-container">
       <div class="form-header">
         <button id="btn-cerrar-conteo" class="btn-cerrar">✖</button>
-        <h2>🧮 Contar inventario</h2>
+        <h2>📦 Contar inventario</h2>
       </div>
       <div class="input-group">
         <label for="conteo-ubicacion">Ubicación que estás contando</label>
@@ -478,6 +441,7 @@
         <summary>En sistema pero no contado hoy (<span id="conteo-faltan-n">0</span>)</summary>
         <div id="conteo-faltan"></div>
       </details>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -486,7 +450,7 @@
     <div class="stock-container">
       <div class="form-header">
         <button id="btn-cerrar-conteos" class="btn-cerrar">✖</button>
-        <h2>📋 Conteos por aplicar</h2>
+        <h2>🧮 Conteos</h2>
       </div>
       <p class="label-opcional" style="margin-bottom:12px;">Los conteos no mueven el stock hasta que los apliques. Al aplicar, el lote queda igual a lo contado con un movimiento de ajuste.</p>
       <div id="lista-conteos"></div>
@@ -494,6 +458,7 @@
         <button id="btn-aplicar-conteos" class="btn-primary">✅ Aplicar seleccionados</button>
         <button id="btn-descartar-conteos" class="btn-secondary">Descartar seleccionados</button>
       </div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -518,6 +483,7 @@
       <div class="barra-acciones">
         <button id="btn-imprimir-etiquetas" class="btn-primary">🖨️ Imprimir (0)</button>
       </div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -526,10 +492,11 @@
     <div class="stock-container">
       <div class="form-header">
         <button id="btn-cerrar-alertas" class="btn-cerrar">✖</button>
-        <h2>⚠️ Alertas de stock</h2>
+        <h2>🔔 Alertas stock</h2>
       </div>
       <p class="label-opcional" style="margin-bottom:12px;">Salidas que dejaron un lote en negativo (por ejemplo, de Visor Tarimas). Corrige con una entrada o edición y márcala revisada.</p>
       <div id="lista-alertas" class="lista-stock"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -542,6 +509,7 @@
       </div>
       <button id="btn-nuevo-usuario" class="btn-primary" style="margin-bottom:15px;">+ Nuevo usuario</button>
       <div id="lista-usuarios" class="lista-stock"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
     </div>
   </section>
 
@@ -629,7 +597,7 @@
   <button id="scanner-cerrar">Cerrar</button>
 </div>
 
-<script src="app.js?v=20261018c"></script>
+<script src="app.js?v=20261018d"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();

@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - FRONTEND v3.2
+// ALMACÉN MEDIESE - FRONTEND v3.3
+// v3.3: menú y pantallas con la misma forma que Mantenimiento Mediese
 // v3.2: escáner QR, búsqueda inteligente, conteo de inventario, etiquetas
 // v3.1: PEPS automático, PU calculado por el servidor, alertas, stock con valor
 // Login en servidor con token (igual que Mantenimiento Mediese)
@@ -324,7 +325,8 @@ const App = (() => {
     mostrar("btn-entrada", tipos.includes("ENTRADA"));
     mostrar("btn-salida", tipos.includes("SALIDA"));
     mostrar("btn-devolucion", tipos.includes("DEVOLUCION"));
-    mostrar("menu-botones-lotes", sup);
+    mostrar("btn-abrir-lote", sup);
+    mostrar("btn-cerrar-lote", sup);
     mostrar("btn-editar-movs", sup);
     mostrar("btn-dashboard", sup);
     mostrar("btn-reconstruir-stock", usuarioActual.rol === "admin");

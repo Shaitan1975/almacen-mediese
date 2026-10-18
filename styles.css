@@ -932,3 +932,36 @@ html, body {
 .fila-opciones { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 10px 0; font-size: 13px; }
 .input-corto { width: 64px !important; padding: 6px !important; }
 .barra-acciones { position: sticky; bottom: 0; background: var(--gris-fondo); padding: 10px 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* ═══ v3.3: menú en cuadrícula como Mantenimiento (colores de Almacén) ═══ */
+.header-textos { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.header-textos .user-info { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-titulo { text-align: left; font-size: 20px; margin-bottom: 14px; }
+.menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 64px; padding: 14px 10px; border-radius: 10px; cursor: pointer;
+  background: #fff; color: var(--azul-primario); border: 1px solid var(--gris-borde);
+  font-family: inherit; font-size: 14px; font-weight: 700; text-align: center; transition: transform .15s, box-shadow .15s;
+}
+.tile small { font-size: 11px; font-weight: 500; opacity: .9; }
+.tile:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(31,78,121,.18); }
+.tile:active { transform: scale(.98); }
+.tile.hidden { display: none !important; }
+.tile-ancho { grid-column: 1 / -1; min-height: 72px; font-size: 17px; }
+.tile-conteo, .tile-conteos { background: #ECFEFF; color: #0E7490; border-color: #A5F3FC; }
+.tile-entrada { background: linear-gradient(135deg, #22C55E, #16A34A); color: #fff; border: 0; }
+.tile-salida { background: linear-gradient(135deg, #EF4444, #DC2626); color: #fff; border: 0; }
+.tile-devolucion { background: linear-gradient(135deg, #F59E0B, #D97706); color: #fff; border: 0; }
+.tile-stock { background: #F0FDF4; color: #15803D; border-color: #BBF7D0; }
+.tile-lotes { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+.tile-abrir { background: linear-gradient(135deg, #8B5CF6, #7C3AED); color: #fff; border: 0; }
+.tile-cerrar { background: linear-gradient(135deg, #0891B2, #0E7490); color: #fff; border: 0; }
+.tile-mov { background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE; }
+.tile-alerta { background: #FEF2F2; color: #B91C1C; border-color: #FECACA; }
+.tile-admin { background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE; }
+.tile .badge { position: absolute; top: 6px; right: 6px; margin: 0; }
+.btn-volver {
+  display: block; width: 100%; margin-top: 18px; padding: 12px; border-radius: 10px; border: 0; cursor: pointer;
+  background: #6B7280; color: #fff; font-family: inherit; font-size: 15px; font-weight: 600;
+}
