@@ -866,3 +866,24 @@ html, body {
   font-size: 18px;
   margin: 0;
 }
+
+/* ═══ v3.0: clases que antes eran estilos en línea ═══ */
+.vacio { text-align: center; padding: 20px; color: #888; }
+.vacio.error, .error { color: var(--rojo-error); }
+.texto-suave { color: #888; font-size: 12px; }
+.texto-rojo { color: #B91C1C !important; }
+.chip { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap; }
+.chip-abierto { background: #DCFCE7; color: #15803D; }
+.chip-cerrado { background: #F3F4F6; color: #6B7280; }
+.chip-retro { background: #FEF3C7; color: #92400E; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+.lote-abierto { border-left: 4px solid #15803D; }
+.lote-cerrado { border-left: 4px solid #9CA3AF; }
+.lote-acciones, .acciones-card { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.lote-acciones > button { flex: 1; }
+.btn-chico { font-size: 13px !important; padding: 8px !important; margin: 0 !important; width: auto; }
+.btn-verde { background: #10B981 !important; border-color: #10B981 !important; }
+.btn-editar-card {
+  margin-top: 10px; font-size: 13px; padding: 8px 12px; border-radius: 6px; cursor: pointer;
+  background: #F59E0B; border: 1px solid #F59E0B; color: #fff; font-weight: 600;
+}
+.acciones-card .btn-editar-card, .acciones-card .btn-cancelar-mov { margin-top: 0; }

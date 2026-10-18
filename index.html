@@ -7,7 +7,7 @@
 <title>Almacén Mediese - Login</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20261018a">
 </head>
 <body class="login-body">
 
@@ -21,7 +21,7 @@
   <form id="login-form" class="login-form">
     <div class="input-group">
       <label for="usuario">Usuario</label>
-      <input type="text" id="usuario" autocomplete="username" required placeholder="tu.usuario">
+      <input type="text" id="usuario" autocomplete="username" autocapitalize="none" required placeholder="tu.usuario">
     </div>
 
     <div class="input-group">
@@ -37,8 +37,7 @@
   <p class="footer-text">Mediese © 2026</p>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=20261018a"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initLogin();

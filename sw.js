@@ -1,103 +1,56 @@
 // ═══════════════════════════════════════════════════════════════════
-// ALMACÉN MEDIESE - SERVICE WORKER
-// Caché offline para que la PWA funcione sin internet
+// ALMACÉN MEDIESE - SERVICE WORKER v3
+// Red primero para la app (así los celulares siempre reciben la última
+// versión); si no hay internet, se usa la copia guardada.
+// Las llamadas al servidor (script.google.com) nunca se guardan.
+// Al publicar cambios: sube el número de CACHE.
 // ═══════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = "almacen-mediese-v1";
-
-const ARCHIVOS_CACHE = [
+const CACHE = "almacen-mediese-v3-20261018a";
+const ARCHIVOS = [
   "./",
   "./index.html",
   "./app.html",
   "./app.js",
   "./styles.css",
   "./manifest.json",
-  "https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"
+  "./logo.png",
+  "./icono_192x192.png"
 ];
 
-
-// ═══════════════════════════════════════════════════════════════════
-// INSTALACIÓN
-// ═══════════════════════════════════════════════════════════════════
-
-self.addEventListener("install", (event) => {
-  console.log("🔧 Service Worker instalando...");
-
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("📦 Cacheando archivos...");
-      return cache.addAll(ARCHIVOS_CACHE).catch((err) => {
-        console.warn("⚠️ Error al cachear algunos archivos:", err);
-      });
-    }).then(() => self.skipWaiting())
-  );
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS)).catch(() => {}));
+  self.skipWaiting();
 });
 
-
-// ═══════════════════════════════════════════════════════════════════
-// ACTIVACIÓN
-// ═══════════════════════════════════════════════════════════════════
-
-self.addEventListener("activate", (event) => {
-  console.log("✅ Service Worker activado");
-
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            console.log("🗑️ Eliminando caché viejo:", key);
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    )
   );
+  self.clients.claim();
 });
 
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;   // servidor y CDNs: directo a la red
 
-// ═══════════════════════════════════════════════════════════════════
-// FETCH - Estrategia de caché
-// ═══════════════════════════════════════════════════════════════════
-
-self.addEventListener("fetch", (event) => {
-  const url = event.request.url;
-
-  // 🔴 NUNCA cachear:
-  // - usuarios.json (siempre debe ser fresco)
-  // - Peticiones a Apps Script (van al servidor)
-  // - Peticiones con ?t= (timestamp para romper caché)
-  if (
-    url.includes("usuarios.json") ||
-    url.includes("script.google.com") ||
-    url.includes("?t=") ||
-    url.includes("callback=")
-  ) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
-
-  // 🟢 Para el resto: Cache First, Network Fallback
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        // Cachear nuevas peticiones
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+  e.respondWith(
+    fetch(req)
+      .then((resp) => {
+        if (resp && resp.status === 200) {
+          const copia = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, copia));
         }
-        return networkResponse;
-      }).catch(() => {
-        // Si no hay red, devolver algo genérico para HTML
-        if (event.request.destination === "document") {
-          return caches.match("./index.html");
-        }
-      });
-    })
+        return resp;
+      })
+      .catch(() =>
+        caches.match(req, { ignoreSearch: true }).then((r) =>
+          r || (req.mode === "navigate" ? caches.match("./index.html") : undefined)
+        )
+      )
   );
 });

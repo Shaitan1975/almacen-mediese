@@ -7,7 +7,7 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20261018a">
 </head>
 <body class="app-body">
 
@@ -18,6 +18,7 @@
   </div>
   <div class="header-right">
     <span id="user-info" class="user-info"></span>
+    <button id="btn-mi-pass" class="btn-logout" title="Cambiar mi contraseña">🔑</button>
     <button id="btn-logout" class="btn-logout">Salir</button>
   </div>
 </header>
@@ -73,6 +74,9 @@
       <button id="btn-ver-historial" class="btn-secondary">📊 Ver mis movimientos de hoy</button>
       <button id="btn-dashboard" class="btn-secondary hidden" style="background: #EFF6FF; color: #1F4E79; border-color: #BFDBFE;">
         📊 Dashboard (Supervisor / Gerencia)
+      </button>
+      <button id="btn-usuarios" class="btn-secondary hidden" style="background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE;">
+        👥 Usuarios (Admin)
       </button>
       <button id="btn-reconstruir-stock" class="btn-secondary hidden" style="background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE;">
         🔄 Reconstruir Stock (Admin)
@@ -399,6 +403,84 @@
     </div>
   </div>
 
+  <!-- Vista: USUARIOS (admin) -->
+  <section id="view-usuarios" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-usuarios" class="btn-cerrar">✖</button>
+        <h2>👥 Usuarios</h2>
+      </div>
+      <button id="btn-nuevo-usuario" class="btn-primary" style="margin-bottom:15px;">+ Nuevo usuario</button>
+      <div id="lista-usuarios" class="lista-stock"></div>
+    </div>
+  </section>
+
+  <!-- Vista: FORMULARIO USUARIO -->
+  <section id="view-usuario-form" class="view-section hidden">
+    <div class="form-container">
+      <div class="form-header">
+        <h2 id="usuario-form-titulo">👤 Nuevo usuario</h2>
+      </div>
+      <input type="hidden" id="usuario-form-modo">
+      <div class="input-group">
+        <label for="usuario-form-usuario">Usuario *</label>
+        <input type="text" id="usuario-form-usuario" placeholder="Ej: jperez (sin espacios ni acentos)" autocomplete="off" autocapitalize="none">
+      </div>
+      <div class="input-group">
+        <label for="usuario-form-nombre">Nombre *</label>
+        <input type="text" id="usuario-form-nombre" placeholder="Ej: Juan Pérez">
+      </div>
+      <div class="input-group">
+        <label for="usuario-form-rol">Rol *</label>
+        <select id="usuario-form-rol" class="manual-select">
+          <option value="almacenista">Almacenista — entradas, salidas y devoluciones</option>
+          <option value="supervisor">Supervisor — además lotes, correcciones y cancelaciones</option>
+          <option value="gerencia">Gerencia — igual que supervisor</option>
+          <option value="admin">Admin — todo, incluye usuarios</option>
+        </select>
+      </div>
+      <div id="usuario-form-grupo-pass">
+        <div class="input-group">
+          <label for="usuario-form-pass1">Contraseña * (mínimo 8)</label>
+          <input type="password" id="usuario-form-pass1" autocomplete="new-password">
+        </div>
+        <div class="input-group">
+          <label for="usuario-form-pass2">Repite la contraseña *</label>
+          <input type="password" id="usuario-form-pass2" autocomplete="new-password">
+        </div>
+      </div>
+      <p id="usuario-form-status" class="send-status"></p>
+      <button id="btn-guardar-usuario" class="btn-primary btn-large">✅ Guardar</button>
+      <button id="btn-cancelar-usuario" class="btn-secondary">Cancelar</button>
+    </div>
+  </section>
+
+  <!-- Vista: CONTRASEÑA (propia o restablecer) -->
+  <section id="view-password" class="view-section hidden">
+    <div class="form-container">
+      <div class="form-header">
+        <button id="btn-cerrar-password" class="btn-cerrar">✖</button>
+        <h2 id="pass-titulo">🔑 Cambiar mi contraseña</h2>
+      </div>
+      <input type="hidden" id="pass-objetivo">
+      <div class="input-group" id="pass-grupo-actual">
+        <label for="pass-actual">Contraseña actual *</label>
+        <input type="password" id="pass-actual" autocomplete="current-password">
+      </div>
+      <div class="input-group">
+        <label for="pass-nueva1">Contraseña nueva * (mínimo 8)</label>
+        <input type="password" id="pass-nueva1" autocomplete="new-password">
+      </div>
+      <div class="input-group">
+        <label for="pass-nueva2">Repite la nueva *</label>
+        <input type="password" id="pass-nueva2" autocomplete="new-password">
+      </div>
+      <p id="pass-status" class="send-status"></p>
+      <button id="btn-guardar-pass" class="btn-primary btn-large">✅ Guardar</button>
+      <button id="btn-pass-cancelar" class="btn-secondary">Cancelar</button>
+    </div>
+  </section>
+
   <!-- Vista: LOADING -->
   <section id="view-loading" class="view-section hidden">
     <div class="loading-container">
@@ -409,8 +491,7 @@
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
-<script src="app-v5.js"></script>
+<script src="app.js?v=20261018a"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();
