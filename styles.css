@@ -965,3 +965,17 @@ html, body {
   display: block; width: 100%; margin-top: 18px; padding: 12px; border-radius: 10px; border: 0; cursor: pointer;
   background: #6B7280; color: #fff; font-family: inherit; font-size: 15px; font-weight: 600;
 }
+
+
+/* Importar CCP */
+.ayuda { font-size: 13px; color: #555; margin: 6px 0 10px; }
+.campo { display: block; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.campo input, .campo select { display: block; width: 100%; margin-top: 4px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; font-weight: 400; background: #fff; }
+.fila-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.imp-resumen { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin: 12px 0; font-size: 14px; }
+.imp-resumen h3 { font-size: 15px; margin: 0 0 6px; }
+.imp-resumen ul { margin: 4px 0; padding-left: 18px; }
+.aviso-imp { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.btn-peligro { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; border: 0; border-radius: 10px; width: 100%; margin-top: 6px; cursor: pointer; }
+.imp-progreso { height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 12px; }
+#imp-barra { height: 100%; width: 0; background: #22c55e; transition: width .3s; }

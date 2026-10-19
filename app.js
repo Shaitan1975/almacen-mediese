@@ -230,6 +230,13 @@ const App = (() => {
     on("btn-editar-movs", "click", abrirEditarMovs);
     on("btn-dashboard", "click", abrirDashboard);
     on("btn-reconstruir-stock", "click", reconstruirStockManual);
+    on("btn-importar-ccp", "click", abrirImportar);
+    on("btn-cerrar-importar", "click", () => { if (!importando) volverAlMenu(); });
+    on("btn-imp-revisar", "click", revisarImportacion);
+    on("btn-imp-importar", "click", ejecutarImportacion);
+    on("imp-periodo", "change", ajustarPeriodo);
+    ["imp-archivo", "imp-anio", "imp-modo", "imp-periodo", "imp-mes", "imp-desde", "imp-hasta", "imp-status"]
+      .forEach(id => on(id, "change", () => { planImport = null; $("btn-imp-importar").classList.add("hidden"); }));
     on("btn-usuarios", "click", verUsuarios);
     on("btn-alertas", "click", verAlertas);
     on("btn-scan-form", "click", escanearEnFormulario);
@@ -330,6 +337,7 @@ const App = (() => {
     mostrar("btn-editar-movs", sup);
     mostrar("btn-dashboard", sup);
     mostrar("btn-reconstruir-stock", usuarioActual.rol === "admin");
+    mostrar("btn-importar-ccp", usuarioActual.rol === "admin");
     mostrar("btn-usuarios", usuarioActual.rol === "admin");
     mostrar("btn-alertas", sup);
     mostrar("btn-conteos", sup);
@@ -346,7 +354,7 @@ const App = (() => {
   const VISTAS = ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
     "view-lotes", "view-lote-movs", "view-editar-movs", "view-usuarios",
-    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas"];
+    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas", "view-importar"];
 
   function mostrarVista(id) {
     VISTAS.forEach(v => { const el = $(v); if (el) el.classList.add("hidden"); });
@@ -1233,6 +1241,229 @@ const App = (() => {
     const resp = await api("reconstruir_stock", {}, "POST");
     alert(resp.ok ? "✅ " + (resp.mensaje || "Stock reconstruido") : "Error: " + (resp.error || "Desconocido"));
     volverAlMenu();
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // IMPORTAR CCP DESDE LA APP (ADMIN) — misma lógica que importar_ccp.py
+  // ═══════════════════════════════════════════════════════════════
+
+  const CCP_HOJA = "ENT-SAL";
+  const CCP_EXCLUIR = ["OBN", "EEG", "HABN", "NOM", "GPTBL", "ENERGIA", "CBRBCS", "MNTCRG", "MANTTO",
+    "JVRSTPS", "CSRPC", "DLMPLMPZ", "KEYLMPZ", "FLTNSMS", "RNTNV", "RNTFC"];
+  const CCP_MESES = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, oct: 10, nov: 11, dic: 12 };
+  const NOMBRE_MES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  const CCP_LOTE = 50;
+  let planImport = null, importando = false;
+
+  function abrirImportar() {
+    const hoy = new Date();
+    $("imp-anio").value = hoy.getFullYear();
+    $("imp-mes").innerHTML = NOMBRE_MES.map((m, i) => '<option value="' + (i + 1) + '">' + m + "</option>").join("");
+    $("imp-mes").value = hoy.getMonth() + 1;
+    ajustarPeriodo();
+    planImport = null;
+    $("imp-resumen").classList.add("hidden");
+    $("btn-imp-importar").classList.add("hidden");
+    $("imp-progreso").classList.add("hidden");
+    $("imp-status-msg").textContent = "";
+    mostrarVista("view-importar");
+  }
+
+  function ajustarPeriodo() {
+    const p = $("imp-periodo").value;
+    $("imp-mes-campo").classList.toggle("hidden", p !== "mes");
+    $("imp-rango").classList.toggle("hidden", p !== "rango");
+  }
+
+  const dd2 = n => String(n).padStart(2, "0");
+  const fmtFecha = d => dd2(d.getDate()) + "/" + dd2(d.getMonth() + 1) + "/" + d.getFullYear();
+  const deInputFecha = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : null; };
+  const aNumFecha = f => { const p = f.split("/"); return Number(p[2]) * 10000 + Number(p[1]) * 100 + Number(p[0]); };
+
+  // Igual que parsear_fecha_ccp del Python: fecha real de Excel o texto "15-ene-26"
+  function fechaCCP(v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (v instanceof Date && !isNaN(v)) return fmtFecha(v);
+    const s = String(v).trim().toLowerCase();
+    let m = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/.exec(s);
+    if (m) { const a = Number(m[3]); return dd2(m[1]) + "/" + dd2(m[2]) + "/" + (a < 100 ? 2000 + a : a); }
+    m = /^(\d{1,2})[\/-]([a-zñ]{3})[a-zñ.]*[\/-](\d{2,4})$/.exec(s);
+    if (m && CCP_MESES[m[2]]) { const a = Number(m[3]); return dd2(m[1]) + "/" + dd2(CCP_MESES[m[2]]) + "/" + (a < 100 ? 2000 + a : a); }
+    return null;
+  }
+  function txt(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(v);
+    return String(v).trim();
+  }
+  function num(v) { const n = parseFloat(String(v === undefined || v === null ? "" : v).replace(/,/g, "")); return isNaN(n) ? 0 : n; }
+
+  async function leerCCP(archivo) {
+    await cargarScript("xlsx.full.min.js");
+    const buf = await archivo.arrayBuffer();
+    let wb;
+    try { wb = XLSX.read(buf, { type: "array", cellDates: true }); }
+    catch (e) {
+      if (/password|encrypt|CFB|ECMA-376/i.test(e.message)) throw new Error("El archivo tiene contraseña. Guárdalo sin contraseña e intenta de nuevo.");
+      throw new Error("No se pudo leer el Excel: " + e.message);
+    }
+    const hoja = wb.Sheets[CCP_HOJA] || wb.Sheets[wb.SheetNames.find(n => n.trim().toUpperCase() === CCP_HOJA)];
+    if (!hoja) throw new Error("El archivo no tiene la hoja " + CCP_HOJA + ". Hojas: " + wb.SheetNames.join(", "));
+    const filas = XLSX.utils.sheet_to_json(hoja, { defval: null, raw: true });
+    // Encabezados sin espacios de más
+    return filas.map(f => { const o = {}; Object.keys(f).forEach(k => o[k.trim().toUpperCase()] = f[k]); return o; });
+  }
+
+  function transformarCCP(filas, anio, desde, hasta, status) {
+    const r = { registros: [], errores: 0, fuera: 0, otroAnio: 0, excluidos: 0, ejemplosError: [] };
+    const nd = desde ? aNumFecha(desde) : null, nh = hasta ? aNumFecha(hasta) : null;
+    filas.forEach((f, i) => {
+      const err = motivo => { r.errores++; if (r.ejemplosError.length < 5) r.ejemplosError.push("Fila " + (i + 2) + ": " + motivo); };
+      const fecha = fechaCCP(f["FECHA"]);
+      if (!fecha) { if (Object.values(f).some(v => v !== null && v !== "")) err("fecha no válida"); return; }
+      if (Number(fecha.split("/")[2]) !== anio) { r.otroAnio++; return; }
+      const nf = aNumFecha(fecha);
+      if ((nd && nf < nd) || (nh && nf > nh)) { r.fuera++; return; }
+      const codigo = txt(f["CODIGO OAR"]);
+      if (!codigo) return err("sin código OAR");
+      if (CCP_EXCLUIR.includes(codigo.toUpperCase())) { r.excluidos++; return; }
+      const mov = txt(f["MOVIMIENTO"]).toUpperCase();
+      if (!["ENTRADA", "SALIDA", "DEVOLUCION"].includes(mov)) return err("movimiento '" + mov + "'");
+      r.registros.push({
+        fecha: fecha, tipo_movimiento: mov, codigo_oar: codigo,
+        descripcion: txt(f["INSUMO / PT / REFACCION"]),
+        lote_insumo: txt(f["LOTE INSUMO"]), lote_trabajo: txt(f["LOTE TRABAJO"]),
+        status_lote: status === "RESPETAR" ? (txt(f["STATUS LOTE"]).toUpperCase() || "ABIERTO") : status,
+        proveedor_cliente: txt(f["PROVEEDOR / CLIENTE"]), ubicacion: txt(f["UBICACION"]),
+        unidad: txt(f["U DE M"]) || "KG", cantidad: num(f["CANTIDAD"]), pu: num(f["PU"]), iva: num(f["IVA"]),
+        notas: "[CCP] " + txt(f["DOCTO"]),
+        usuario: "importacion", nombre_usuario: "Importacion CCP", rol: "admin",
+      });
+    });
+    return r;
+  }
+
+  function periodoElegido(anio) {
+    const p = $("imp-periodo").value;
+    if (p === "todo") return { desde: null, hasta: null, texto: "todo " + anio };
+    if (p === "mes") {
+      const m = Number($("imp-mes").value);
+      const ult = new Date(anio, m, 0).getDate();
+      return { desde: "01/" + dd2(m) + "/" + anio, hasta: dd2(ult) + "/" + dd2(m) + "/" + anio, texto: NOMBRE_MES[m - 1] + " " + anio };
+    }
+    const d = deInputFecha($("imp-desde").value), h = deInputFecha($("imp-hasta").value);
+    if (!d || !h) throw new Error("Elige las fechas Desde y Hasta");
+    if (aNumFecha(d) > aNumFecha(h)) throw new Error("La fecha Desde es posterior a Hasta");
+    if (Number(d.split("/")[2]) !== anio || Number(h.split("/")[2]) !== anio) throw new Error("El rango debe estar dentro del año " + anio);
+    return { desde: d, hasta: h, texto: d + " a " + h };
+  }
+
+  async function revisarImportacion() {
+    const st = $("imp-status-msg");
+    const res = $("imp-resumen");
+    planImport = null;
+    $("btn-imp-importar").classList.add("hidden");
+    res.classList.add("hidden");
+    try {
+      const archivo = $("imp-archivo").files[0];
+      if (!archivo) throw new Error("Elige el archivo Excel del CCP");
+      const anio = Number($("imp-anio").value);
+      if (!(anio >= 2020 && anio <= 2100)) throw new Error("Año no válido");
+      const modo = $("imp-modo").value;
+      const per = periodoElegido(anio);
+      if (modo === "REEMPLAZAR_PERIODO" && !per.desde) throw new Error("'Reemplazar periodo' necesita un mes o un rango. Para todo el año usa 'Reemplazar todo el año'.");
+      st.textContent = "Leyendo Excel..."; st.className = "send-status";
+      const filas = await leerCCP(archivo);
+      const t = transformarCCP(filas, anio, per.desde, per.hasta, $("imp-status").value);
+      if (!t.registros.length) throw new Error("No hay movimientos de " + per.texto + " en el archivo." + (t.errores ? " (" + t.errores + " filas con error)" : ""));
+
+      let borrar = null;
+      if (modo === "REEMPLAZAR_PERIODO") {
+        st.textContent = "Consultando lo que hay en el sistema...";
+        borrar = await api("contar_movimientos_rango", { fecha_desde: per.desde, fecha_hasta: per.hasta }, "POST");
+        if (!borrar.ok) throw new Error(borrar.error || "No se pudo consultar el periodo");
+      }
+      const porTipo = {}, porMes = {};
+      t.registros.forEach(x => { porTipo[x.tipo_movimiento] = (porTipo[x.tipo_movimiento] || 0) + 1; const m = Number(x.fecha.split("/")[1]); porMes[m] = (porMes[m] || 0) + 1; });
+      const li = o => Object.keys(o).map(k => "<li>" + esc(k) + ": <b>" + o[k] + "</b></li>").join("");
+      let html = "<h3>Se van a importar " + t.registros.length + " movimientos (" + esc(per.texto) + ")</h3>" +
+        "<div class='fila-2'><ul>" + li(porTipo) + "</ul><ul>" + Object.keys(porMes).map(m => "<li>" + NOMBRE_MES[m - 1] + ": <b>" + porMes[m] + "</b></li>").join("") + "</ul></div>";
+      const notas = [];
+      if (t.excluidos) notas.push(t.excluidos + " de códigos excluidos (energía, nómina, etc.)");
+      if (t.fuera) notas.push(t.fuera + " fuera del periodo");
+      if (t.otroAnio) notas.push(t.otroAnio + " de otro año");
+      if (notas.length) html += "<p class='ayuda'>No se importan: " + esc(notas.join(" · ")) + "</p>";
+      if (t.errores) html += "<p class='aviso-imp'>⚠️ " + t.errores + " filas con error se saltan:<br>" + t.ejemplosError.map(esc).join("<br>") + "</p>";
+      if (modo === "REEMPLAZAR_PERIODO") {
+        html += "<p class='aviso-imp'>🗑️ Se borrarán <b>" + (borrar.importados != null ? borrar.importados : borrar.total) + "</b> movimientos importados antes en ese periodo" +
+          (borrar.se_conservan ? " y se <b>conservan " + borrar.se_conservan + "</b> registrados en la app" : "") + ". Se guarda un respaldo.</p>";
+      } else if (modo === "REEMPLAZAR") {
+        html += "<p class='aviso-imp'>🗑️ Se borrarán TODOS los movimientos importados de " + anio + " (los registrados en la app se conservan). Se guarda un respaldo.</p>";
+      } else {
+        html += "<p class='aviso-imp'>➕ No se borra nada. Ojo: si ya importaste este periodo, quedará duplicado.</p>";
+      }
+      html += "<p class='ayuda'>Al terminar se reconstruye el stock y se regeneran los lotes.</p>";
+      res.innerHTML = html;
+      res.classList.remove("hidden");
+      planImport = { anio, modo, per, registros: t.registros, forzar: $("imp-status").value === "RESPETAR" ? null : $("imp-status").value };
+      $("btn-imp-importar").classList.remove("hidden");
+      st.textContent = "Revisa el resumen y, si está bien, pulsa Importar ahora."; st.className = "send-status ok";
+    } catch (e) {
+      st.textContent = "❌ " + e.message; st.className = "send-status error";
+    }
+  }
+
+  async function ejecutarImportacion() {
+    if (!planImport || importando) return;
+    const p = planImport;
+    const conf = prompt("Se importarán " + p.registros.length + " movimientos (" + p.per.texto + ", modo " + p.modo.replace("_", " ").toLowerCase() + ").\n\nEscribe CONFIRMAR para continuar:");
+    if (conf === null || conf.trim().toUpperCase() !== "CONFIRMAR") return;
+    const st = $("imp-status-msg"), barra = $("imp-barra");
+    const paso = (t, pct) => { st.textContent = t; st.className = "send-status"; if (pct != null) barra.style.width = pct + "%"; };
+    importando = true;
+    $("btn-imp-importar").classList.add("hidden");
+    $("btn-imp-revisar").disabled = true;
+    $("imp-progreso").classList.remove("hidden");
+    try {
+      if (p.modo === "REEMPLAZAR_PERIODO") {
+        paso("Borrando el periodo (con respaldo)...", 3);
+        const r = await api("limpiar_movimientos_rango", { fecha_desde: p.per.desde, fecha_hasta: p.per.hasta }, "POST");
+        if (!r.ok) throw new Error("Al borrar: " + (r.error || "error"));
+      } else if (p.modo === "REEMPLAZAR") {
+        paso("Borrando lo importado del año (con respaldo)...", 3);
+        const r = await api("limpiar_movimientos", { anio: p.anio }, "POST");
+        if (!r.ok) throw new Error("Al borrar: " + (r.error || "error"));
+      }
+      let insertados = 0;
+      const total = p.registros.length;
+      for (let i = 0; i < total; i += CCP_LOTE) {
+        const lote = p.registros.slice(i, i + CCP_LOTE);
+        paso("Importando " + Math.min(i + CCP_LOTE, total) + " de " + total + "...", 5 + Math.round(85 * i / total));
+        let r = await api("importar_movimientos", { anio: p.anio, movimientos: lote, forzar_status: p.forzar || "" }, "POST");
+        if (!r.ok && /ocupado|conexión/i.test(r.error || "")) {         // un reintento si el servidor estaba ocupado
+          await new Promise(res => setTimeout(res, 3000));
+          r = await api("importar_movimientos", { anio: p.anio, movimientos: lote, forzar_status: p.forzar || "" }, "POST");
+        }
+        if (!r.ok) throw new Error("Se detuvo en el movimiento " + (i + 1) + " de " + total + ": " + (r.error || "error") +
+          ". Ya se importaron " + insertados + ". Repite la importación en modo 'Reemplazar periodo' para dejarlo completo.");
+        insertados += r.insertados || 0;
+      }
+      paso("Reconstruyendo stock...", 92);
+      const rs = await api("reconstruir_stock", {}, "POST");
+      paso("Regenerando lotes...", 97);
+      const rl = await api("generar_lotes", {}, "POST");
+      barra.style.width = "100%";
+      st.textContent = "✅ Importados " + insertados + " movimientos." +
+        (rs.ok ? " Stock reconstruido." : " ⚠️ Stock: " + rs.error) + (rl.ok ? " Lotes al día." : " ⚠️ Lotes: " + rl.error);
+      st.className = "send-status ok";
+      planImport = null;
+    } catch (e) {
+      st.textContent = "❌ " + e.message; st.className = "send-status error";
+    } finally {
+      importando = false;
+      $("btn-imp-revisar").disabled = false;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════

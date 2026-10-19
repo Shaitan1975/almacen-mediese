@@ -7,7 +7,7 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261018d">
+<link rel="stylesheet" href="styles.css?v=20261018e">
 </head>
 <body class="app-body">
 
@@ -47,6 +47,7 @@
         <button id="btn-conteos" class="tile tile-conteos hidden">🧮 Conteos <span id="badge-conteos" class="badge hidden"></span></button>
         <button id="btn-etiquetas" class="tile">🏷️ Etiquetas QR</button>
         <button id="btn-usuarios" class="tile tile-admin hidden">👥 Usuarios</button>
+        <button id="btn-importar-ccp" class="tile tile-admin hidden">📥 Importar CCP</button>
         <button id="btn-reconstruir-stock" class="tile tile-admin hidden">♻️ Reconstruir stock</button>
       </div>
     </div>
@@ -580,6 +581,58 @@
   </section>
 
   <!-- Vista: LOADING -->
+  <!-- Vista: IMPORTAR CCP (admin) -->
+  <section id="view-importar" class="view-section hidden">
+    <div class="form-container">
+      <div class="form-header">
+        <button id="btn-cerrar-importar" class="btn-cerrar">✖</button>
+        <h2>📥 Importar CCP</h2>
+      </div>
+      <p class="ayuda">Elige el Excel del CCP <b>sin contraseña</b>. Se lee aquí en tu equipo; solo se envían los movimientos.</p>
+      <label class="campo">Archivo Excel (hoja ENT-SAL)
+        <input type="file" id="imp-archivo" accept=".xlsx,.xlsm,.xls">
+      </label>
+      <label class="campo">Año
+        <input type="number" id="imp-anio" min="2020" max="2100">
+      </label>
+      <label class="campo">Modo
+          <select id="imp-modo">
+            <option value="REEMPLAZAR_PERIODO">Reemplazar periodo (recomendado)</option>
+            <option value="AGREGAR">Agregar (no borra)</option>
+            <option value="REEMPLAZAR">Reemplazar todo el año</option>
+          </select>
+      </label>
+      <div class="fila-2">
+        <label class="campo">Periodo
+          <select id="imp-periodo">
+            <option value="mes">Un mes</option>
+            <option value="rango">Rango de fechas</option>
+            <option value="todo">Todo el año</option>
+          </select>
+        </label>
+        <label class="campo" id="imp-mes-campo">Mes
+          <select id="imp-mes"></select>
+        </label>
+      </div>
+      <div class="fila-2 hidden" id="imp-rango">
+        <label class="campo">Desde <input type="date" id="imp-desde"></label>
+        <label class="campo">Hasta <input type="date" id="imp-hasta"></label>
+      </div>
+      <label class="campo">Status de lotes
+        <select id="imp-status">
+          <option value="ABIERTO">Abierto</option>
+          <option value="CERRADO">Cerrado</option>
+          <option value="RESPETAR">Respetar el del CCP</option>
+        </select>
+      </label>
+      <button id="btn-imp-revisar" class="btn-primary btn-large">🔍 Revisar (no cambia nada)</button>
+      <div id="imp-resumen" class="imp-resumen hidden"></div>
+      <button id="btn-imp-importar" class="btn-peligro btn-large hidden">📥 Importar ahora</button>
+      <div id="imp-progreso" class="imp-progreso hidden"><div id="imp-barra"></div></div>
+      <p id="imp-status-msg" class="send-status"></p>
+    </div>
+  </section>
+
   <section id="view-loading" class="view-section hidden">
     <div class="loading-container">
       <div class="spinner"></div>
@@ -597,7 +650,7 @@
   <button id="scanner-cerrar">Cerrar</button>
 </div>
 
-<script src="app.js?v=20261018d"></script>
+<script src="app.js?v=20261018e"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();
