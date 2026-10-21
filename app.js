@@ -1012,12 +1012,14 @@ const App = (() => {
   // STOCK ACTUAL
   // ═══════════════════════════════════════════════════════════════
 
+  let stockCorte = "";
   async function verStock() {
     cargando("Cargando stock...");
     const resp = await api("listar_stock");
     if (!resp.ok) { alert("Error al cargar stock: " + resp.error); return volverAlMenu(); }
     stockCache = resp.items || [];
     stockValorTotal = resp.valor_total || 0;
+    stockCorte = resp.corte || "";
     $("stock-buscar").value = "";
     renderizarStock(stockCache);
     mostrarVista("view-stock");
@@ -1053,6 +1055,7 @@ const App = (() => {
       [negativos.length, "⚠️ En negativo"],
     ];
     if (esSupervisor()) resumen.push(["$" + fmtNum(stockValorTotal), "Valor inventario"]);
+    if (stockCorte) resumen.push([stockCorte, "📅 Datos al"]);
     $("stock-resumen").innerHTML = tarjetasResumen(resumen);
     cont.innerHTML = "";
     if (items.length === 0) { cont.innerHTML = '<div class="stock-vacio">No hay insumos con stock</div>'; return; }
@@ -1076,6 +1079,7 @@ const App = (() => {
           '<span>Lote: <strong>' + esc(item.lote || 'SIN_LOTE') + '</strong>' + (item.primera_entrada ? ' · ' + esc(item.primera_entrada) : '') + '</span>' +
           '<span>' + esc(item.ubicacion || '-') + '</span>' +
         '</div>' +
+        (item.ultimo_movimiento ? '<div class="stock-item-info"><span>📅 Último movimiento: <strong>' + esc(item.ultimo_movimiento) + '</strong></span></div>' : '') +
         (esSupervisor() && item.pu ? '<div class="stock-item-info"><span>PU: $' + fmtNum(item.pu) + '</span><span>Valor: $' + fmtNum(item.valor) + '</span></div>' : '');
       cont.appendChild(div);
     });
@@ -1088,7 +1092,8 @@ const App = (() => {
     if (!resp.ok) { panel.classList.add("hidden"); return; }
     const total = Number(resp.saldo_total) || 0;
     const unidad = insumoSeleccionado && insumoSeleccionado.unidad ? insumoSeleccionado.unidad : "";
-    valor.textContent = fmtNum(total) + " " + unidad + (total === 0 ? " (sin stock)" : "");
+    valor.textContent = fmtNum(total) + " " + unidad + (total === 0 ? " (sin stock)" : "") +
+      (resp.ultimo_movimiento ? " · al " + resp.ultimo_movimiento : "");
     panel.classList.toggle("warning", total < 100);
     panel.classList.remove("hidden");
   }
