@@ -992,3 +992,5 @@ html, body {
 .traza-tabla th { background: #1f4e79; color: #fff; padding: 4px; } .traza-tabla td { border-bottom: 1px solid #e2e8f0; padding: 4px; }
 .traza-tabla .num { text-align: right; }
 .traza-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.traza-item.aviso { background: #fffbeb; border-color: #fcd34d; }
+.aviso-txt { display: block; color: #92400e; margin-top: 6px; font-size: 12px; }

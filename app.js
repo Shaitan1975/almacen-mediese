@@ -1552,7 +1552,8 @@ const App = (() => {
         "<span>Usado en producción</span><b>" + f(b.a_produccion) + "</b>" +
         (b.otros ? "<span>Otras salidas</span><b>" + f(b.otros) + "</b>" : "") +
         "<span>En almacén hoy</span><b>" + f(b.en_stock) + "</b>" +
-        '<span>Cuadre</span><b class="' + (ok ? "ok" : "mal") + '">' + b.porcentaje + "% " + (ok ? "✅" : "⚠️") + "</b></div></div>";
+        '<span>Cuadre</span><b class="' + (ok ? "ok" : "mal") + '">' + b.porcentaje + "% " + (ok ? "✅" : "⚠️") + "</b></div>" +
+        (b.lotes_sin_producto ? '<small class="aviso-txt">⚠️ ' + b.lotes_sin_producto + " lote(s) de trabajo sin producto registrado: no se puede seguir hasta el cliente.</small>" : "") + "</div>";
     });
     if (!r.balance.length) h += '<p class="label-opcional">Es un lote de trabajo: abajo verás sus insumos y lo que produjo.</p>';
     h += "</div>";
@@ -1579,6 +1580,12 @@ const App = (() => {
     h += '<div class="traza-sec"><h3>➡️ Destino (en qué se usó)</h3>';
     if (!r.destino.length) h += '<p class="label-opcional">No se usó para producir otro producto.</p>';
     r.destino.slice().sort((a, b) => a.nivel - b.nivel).forEach(d => {
+      if (d.sin_producto) {
+        h += '<div class="traza-item aviso" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>Lote de trabajo ' + esc(d.lote_trabajo) + "</b>" +
+          "<small>Se usaron " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " (" + esc(d.fecha) + ")<br>" +
+          "⚠️ No hay entrada de producto con el lote de trabajo " + esc(d.lote_trabajo) + ": la cadena se corta aquí. Registra la entrada del producto con ese lote de trabajo.</small></div>";
+        return;
+      }
       h += '<div class="traza-item" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, d.producto)) + "</b>" +
         "<small>Con " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " · " + esc(d.lote_trabajo) + " (" + esc(d.fecha) + ")</small></div>";
     });
@@ -1642,7 +1649,7 @@ const App = (() => {
     const filas = [["Sección", "Nivel", "Código", "Descripción", "Lote", "Lote de trabajo", "Cantidad", "Unidad", "Fecha", "Destino / proveedor", "CEDIS", "Tarima"]];
     const nd = key => r.nodos[key] || { cod: key, lote: "" };
     r.origen.forEach(o => { const n = nd(o.insumo); filas.push(["Origen", o.nivel, n.cod, n.desc, n.lote, o.lote_trabajo, o.cant, o.unid, o.fecha, (n.recepciones || []).map(x => x.proveedor).join(" / "), "", ""]); });
-    r.destino.forEach(d => { const n = nd(d.producto); filas.push(["Destino", d.nivel, n.cod, n.desc, n.lote, d.lote_trabajo, d.cant_usada, d.unid, d.fecha, "", "", ""]); });
+    r.destino.forEach(d => { const n = d.producto ? nd(d.producto) : { cod: "(sin producto registrado)", desc: "", lote: "" }; filas.push(["Destino", d.nivel, n.cod, n.desc, n.lote, d.lote_trabajo, d.cant_usada, d.unid, d.fecha, "", "", ""]); });
     r.clientes.forEach(c => { const n = nd(c.producto); filas.push(["Salida cliente", "", n.cod, n.desc, n.lote, "", c.cant, c.unid, c.fecha, c.destino, c.cedis, c.tarima]); });
     r.en_stock.forEach(s => filas.push(["En almacén", "", s.cod, s.desc, s.lote, "", s.saldo, s.unid, "", s.ubic, "", ""]));
     const blob = new Blob(["﻿" + filas.map(f => f.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
