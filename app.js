@@ -240,6 +240,11 @@ const App = (() => {
       .forEach(id => on(id, "change", () => { planImport = null; $("btn-imp-importar").classList.add("hidden"); }));
     on("btn-usuarios", "click", verUsuarios);
     on("btn-alertas", "click", verAlertas);
+    on("btn-trazabilidad", "click", abrirTrazabilidad);
+    on("btn-cerrar-traza", "click", volverAlMenu);
+    on("btn-traza-buscar", "click", () => rastrearLote());
+    on("btn-traza-qr", "click", escanearTraza);
+    on("traza-lote", "keydown", e => { if (e.key === "Enter") rastrearLote(); });
     on("btn-scan-form", "click", escanearEnFormulario);
     on("btn-scan-stock", "click", escanearEnStock);
     on("btn-conteo", "click", abrirConteo);
@@ -341,6 +346,7 @@ const App = (() => {
     mostrar("btn-importar-ccp", usuarioActual.rol === "admin");
     mostrar("btn-usuarios", usuarioActual.rol === "admin");
     mostrar("btn-alertas", sup);
+    mostrar("btn-trazabilidad", sup);
     mostrar("btn-conteos", sup);
     if (sup) { actualizarBadgeAlertas(); actualizarBadgeConteos(); }
   }
@@ -355,7 +361,7 @@ const App = (() => {
   const VISTAS = ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
     "view-lotes", "view-lote-movs", "view-editar-movs", "view-usuarios",
-    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas", "view-importar"];
+    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas", "view-importar", "view-trazabilidad"];
 
   function mostrarVista(id) {
     VISTAS.forEach(v => { const el = $(v); if (el) el.classList.add("hidden"); });
@@ -1486,6 +1492,162 @@ const App = (() => {
       importando = false;
       $("btn-imp-revisar").disabled = false;
     }
+  }
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // TRAZABILIDAD / SIMULACRO DE RETIRO (supervisor+)
+  // ═══════════════════════════════════════════════════════════════
+  let trazaActual = null, trazaInicio = null;
+
+  function abrirTrazabilidad() {
+    $("traza-resultado").innerHTML = "";
+    mostrarVista("view-trazabilidad");
+    enfocarSiLibre("traza-lote");
+  }
+
+  async function escanearTraza() {
+    const txt = await escanearQR("Apunta a la etiqueta del lote o de la tarima");
+    if (!txt) return;
+    const t = String(txt).trim();
+    let lote = "";
+    if (/^ALM\|/i.test(t)) lote = (t.split("|")[2] || t.split("|")[1] || "").trim();
+    else if (/LOTES:/i.test(t)) lote = (/LOTES:([^:|,]+)/i.exec(t) || [])[1] || "";     // QR de tarima de Visor
+    else lote = t;
+    $("traza-lote").value = lote.toUpperCase();
+    rastrearLote();
+  }
+
+  const nomNodo = (r, key) => {
+    if (key.indexOf("LT|") === 0) return "Lote de trabajo " + key.slice(3);
+    const n = r.nodos[key] || {};
+    return (n.cod || key.split("|")[0]) + (n.desc ? " · " + n.desc : "") + " — lote " + (n.lote || key.split("|")[1]);
+  };
+
+  async function rastrearLote() {
+    const lote = $("traza-lote").value.trim();
+    const cont = $("traza-resultado");
+    if (!lote) { cont.innerHTML = '<p class="vacio error">Escribe un lote</p>'; return; }
+    trazaInicio = new Date();
+    cont.innerHTML = '<p class="vacio">Rastreando ' + esc(lote) + "…</p>";
+    const r = await api("trazabilidad", { lote: lote });
+    if (!r.ok) { cont.innerHTML = '<p class="vacio error">❌ ' + esc(r.error) + "</p>"; return; }
+    if (!r.encontrado) { cont.innerHTML = '<p class="vacio">' + esc(r.mensaje) + "</p>"; return; }
+    trazaActual = r;
+    cont.innerHTML = htmlTraza_(r, false);
+    $("btn-traza-imprimir").addEventListener("click", imprimirTraza);
+    $("btn-traza-csv").addEventListener("click", csvTraza);
+  }
+
+  function htmlTraza_(r, imprimir) {
+    const f = n => fmtNum(n);
+    let h = "";
+    // Resumen / balance de masa
+    h += '<div class="traza-sec"><h3>📊 Balance del lote ' + esc(r.lote) + "</h3>";
+    r.balance.forEach(b => {
+      const ok = b.porcentaje >= 99.5 && b.porcentaje <= 100.5;
+      h += '<div class="traza-card"><b>' + esc(b.cod + (b.desc ? " · " + b.desc : "")) + "</b>" +
+        '<div class="traza-grid"><span>Entró / se produjo</span><b>' + f(b.entrada) + " " + esc(b.unid) + "</b>" +
+        "<span>Salió a clientes</span><b>" + f(b.a_clientes) + "</b>" +
+        "<span>Usado en producción</span><b>" + f(b.a_produccion) + "</b>" +
+        (b.otros ? "<span>Otras salidas</span><b>" + f(b.otros) + "</b>" : "") +
+        "<span>En almacén hoy</span><b>" + f(b.en_stock) + "</b>" +
+        '<span>Cuadre</span><b class="' + (ok ? "ok" : "mal") + '">' + b.porcentaje + "% " + (ok ? "✅" : "⚠️") + "</b></div></div>";
+    });
+    if (!r.balance.length) h += '<p class="label-opcional">Es un lote de trabajo: abajo verás sus insumos y lo que produjo.</p>';
+    h += "</div>";
+
+    // Origen
+    h += '<div class="traza-sec"><h3>⬅️ Origen (con qué se hizo)</h3>';
+    if (!r.origen.length) h += '<p class="label-opcional">Sin insumos ligados: es materia prima recibida de proveedor.</p>';
+    r.origen.slice().sort((a, b) => a.nivel - b.nivel).forEach(o => {
+      const n = r.nodos[o.insumo] || {};
+      const rec = (n.recepciones || []).map(x => esc(x.proveedor || "?") + " (" + esc(x.fecha) + ", " + f(x.cant) + ")").join("; ");
+      h += '<div class="traza-item" style="margin-left:' + (o.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, o.insumo)) + "</b>" +
+        "<small>Usado: " + f(o.cant) + " " + esc(o.unid) + " en " + esc(o.lote_trabajo) + " (" + esc(o.fecha) + ")" +
+        (rec ? "<br>Proveedor: " + rec : "") + "</small></div>";
+    });
+    // Proveedor del propio lote, si es insumo recibido
+    r.inicio.forEach(key => {
+      const n = r.nodos[key];
+      if (n && n.recepciones.length) h += '<div class="traza-item"><b>Recepción de ' + esc(nomNodo(r, key)) + "</b><small>" +
+        n.recepciones.map(x => esc(x.proveedor || "?") + " · " + esc(x.fecha) + " · " + f(x.cant) + " " + esc(n.unid)).join("<br>") + "</small></div>";
+    });
+    h += "</div>";
+
+    // Destino
+    h += '<div class="traza-sec"><h3>➡️ Destino (en qué se usó)</h3>';
+    if (!r.destino.length) h += '<p class="label-opcional">No se usó para producir otro producto.</p>';
+    r.destino.slice().sort((a, b) => a.nivel - b.nivel).forEach(d => {
+      h += '<div class="traza-item" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, d.producto)) + "</b>" +
+        "<small>Con " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " · " + esc(d.lote_trabajo) + " (" + esc(d.fecha) + ")</small></div>";
+    });
+    h += "</div>";
+
+    // Clientes
+    h += '<div class="traza-sec"><h3>🚚 Salidas a clientes (' + r.clientes.length + ")</h3>";
+    if (!r.clientes.length) h += '<p class="label-opcional">Ninguna salida a cliente registrada.</p>';
+    else {
+      h += '<table class="traza-tabla"><tr><th>Fecha</th><th>Producto / lote</th><th>Camión</th><th>CEDIS</th><th>Tarima</th><th>Cant.</th></tr>';
+      r.clientes.forEach(c => {
+        const n = r.nodos[c.producto] || {};
+        h += "<tr><td>" + esc(c.fecha) + "</td><td>" + esc(n.cod + " " + n.lote) + "</td><td>" + esc(c.destino) + "</td><td>" + esc(c.cedis || "-") +
+          "</td><td>" + esc(c.tarima || "-") + '</td><td class="num">' + f(c.cant) + "</td></tr>";
+      });
+      h += "</table>";
+    }
+    if (r.consumos.length) {
+      h += "<p class='label-opcional'><b>Otras salidas:</b> " + r.consumos.map(c => esc(c.fecha + " · " + (r.nodos[c.producto] || {}).cod + " · " + f(c.cant) + " → " + c.destino)).join("; ") + "</p>";
+    }
+    h += "</div>";
+
+    // Dónde está
+    h += '<div class="traza-sec"><h3>📦 Dónde está hoy (para retener)</h3>';
+    if (!r.en_stock.length) h += '<p class="label-opcional">Nada en almacén.</p>';
+    r.en_stock.forEach(s => {
+      h += '<div class="traza-item ' + (s.saldo < 0 ? "neg" : "") + '"><b>' + esc(s.cod + " · " + (s.desc || "") + " — lote " + s.lote) + "</b><small>" +
+        f(s.saldo) + " " + esc(s.unid) + " · " + esc(s.ubic || "-") + "</small></div>";
+    });
+    h += "</div>";
+    h += '<p class="label-opcional">Generado ' + esc(r.generado) + " · " + r.segundos + " s</p>";
+    if (!imprimir) h += '<div class="traza-botones"><button id="btn-traza-imprimir" class="btn-primary">🖨️ Imprimir simulacro</button><button id="btn-traza-csv" class="btn-secondary">📥 Exportar CSV</button></div>';
+    return h;
+  }
+
+  function imprimirTraza() {
+    const r = trazaActual; if (!r) return;
+    const w = window.open("", "_blank");
+    if (!w) return alert("Permite las ventanas emergentes de este sitio para imprimir.");
+    const fin = new Date();
+    const fh = d => d.toLocaleDateString("es-MX") + " " + d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+    const css = "body{font-family:Arial,sans-serif;font-size:11px;margin:16px;color:#000}h1{font-size:16px;margin:0}h3{font-size:13px;background:#1f4e79;color:#fff;padding:4px 6px;margin:12px 0 6px}" +
+      ".traza-card,.traza-item{border:1px solid #bbb;padding:5px 7px;margin:4px 0;border-radius:4px}.traza-item small{display:block;color:#333}.traza-grid{display:grid;grid-template-columns:auto auto auto auto auto auto;gap:2px 10px}" +
+      ".traza-tabla{width:100%;border-collapse:collapse}.traza-tabla td,.traza-tabla th{border:1px solid #999;padding:3px}.num{text-align:right}.ok{color:#047857}.mal{color:#b91c1c}.label-opcional{color:#444}" +
+      ".enc{display:flex;justify-content:space-between;border-bottom:2px solid #1f4e79;padding-bottom:6px}.firmas{display:flex;justify-content:space-around;margin-top:40px}.firmas div{border-top:1px solid #000;width:30%;text-align:center;padding-top:4px}" +
+      "@media print{button{display:none}}";
+    w.document.write("<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Simulacro de retiro " + esc(r.lote) + "</title><style>" + css + "</style></head><body>" +
+      "<div class='enc'><div><h1>SIMULACRO DE RETIRO / TRAZABILIDAD</h1>Mediese S.A. de C.V. · BRCGS 3.9</div><div>Lote: <b>" + esc(r.lote) + "</b><br>Inicio: " + fh(trazaInicio || fin) + " · Fin: " + fh(fin) +
+      "<br>Responsable: " + esc((getSession() || {}).nombre || "") + "</div></div>" +
+      htmlTraza_(r, true) +
+      "<h3>Conclusión</h3><p>☐ Trazabilidad completa en menos de 4 horas &nbsp; ☐ Cuadre de cantidades ≥ 99.5% &nbsp; ☐ Producto en almacén identificado y retenido</p>" +
+      "<p>Observaciones: ____________________________________________________________________________</p>" +
+      "<div class='firmas'><div>Realizó</div><div>Calidad</div><div>Gerencia</div></div>" +
+      "<p style='margin-top:20px'><button onclick='window.print()'>🖨️ Imprimir / Guardar PDF</button></p></body></html>");
+    w.document.close();
+  }
+
+  function csvTraza() {
+    const r = trazaActual; if (!r) return;
+    const q = v => '"' + String(v === undefined || v === null ? "" : v).replace(/"/g, '""') + '"';
+    const filas = [["Sección", "Nivel", "Código", "Descripción", "Lote", "Lote de trabajo", "Cantidad", "Unidad", "Fecha", "Destino / proveedor", "CEDIS", "Tarima"]];
+    const nd = key => r.nodos[key] || { cod: key, lote: "" };
+    r.origen.forEach(o => { const n = nd(o.insumo); filas.push(["Origen", o.nivel, n.cod, n.desc, n.lote, o.lote_trabajo, o.cant, o.unid, o.fecha, (n.recepciones || []).map(x => x.proveedor).join(" / "), "", ""]); });
+    r.destino.forEach(d => { const n = nd(d.producto); filas.push(["Destino", d.nivel, n.cod, n.desc, n.lote, d.lote_trabajo, d.cant_usada, d.unid, d.fecha, "", "", ""]); });
+    r.clientes.forEach(c => { const n = nd(c.producto); filas.push(["Salida cliente", "", n.cod, n.desc, n.lote, "", c.cant, c.unid, c.fecha, c.destino, c.cedis, c.tarima]); });
+    r.en_stock.forEach(s => filas.push(["En almacén", "", s.cod, s.desc, s.lote, "", s.saldo, s.unid, "", s.ubic, "", ""]));
+    const blob = new Blob(["﻿" + filas.map(f => f.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "trazabilidad_" + r.lote + ".csv"; a.click();
   }
 
   // ═══════════════════════════════════════════════════════════════

@@ -979,3 +979,16 @@ html, body {
 .btn-peligro { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; border: 0; border-radius: 10px; width: 100%; margin-top: 6px; cursor: pointer; }
 .imp-progreso { height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin-top: 12px; }
 #imp-barra { height: 100%; width: 0; background: #22c55e; transition: width .3s; }
+
+/* Trazabilidad */
+.traza-sec { margin-bottom: 14px; }
+.traza-sec h3 { font-size: 15px; color: #1f4e79; margin: 6px 0; }
+.traza-card, .traza-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; margin: 6px 0; font-size: 13px; }
+.traza-item small { display: block; color: #475569; margin-top: 2px; }
+.traza-item.neg { background: #fef2f2; border-color: #fecaca; }
+.traza-grid { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin-top: 6px; }
+.traza-grid .ok { color: #047857; } .traza-grid .mal { color: #b91c1c; }
+.traza-tabla { width: 100%; border-collapse: collapse; font-size: 12px; }
+.traza-tabla th { background: #1f4e79; color: #fff; padding: 4px; } .traza-tabla td { border-bottom: 1px solid #e2e8f0; padding: 4px; }
+.traza-tabla .num { text-align: right; }
+.traza-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }

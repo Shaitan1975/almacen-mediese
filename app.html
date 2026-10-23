@@ -7,7 +7,7 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261023a">
+<link rel="stylesheet" href="styles.css?v=20261023b">
 </head>
 <body class="app-body">
 
@@ -43,6 +43,7 @@
         <button id="btn-cerrar-lote" class="tile tile-cerrar hidden">✅ Cerrar lote</button>
         <button id="btn-dashboard" class="tile tile-mov hidden">📋 Movimientos</button>
         <button id="btn-editar-movs" class="tile tile-alerta hidden">✏️ Corregir movimientos</button>
+        <button id="btn-trazabilidad" class="tile tile-mov hidden">🔎 Trazabilidad</button>
         <button id="btn-alertas" class="tile tile-alerta hidden">🔔 Alertas stock <span id="badge-alertas" class="badge hidden"></span></button>
         <button id="btn-conteos" class="tile tile-conteos hidden">🧮 Conteos <span id="badge-conteos" class="badge hidden"></span></button>
         <button id="btn-etiquetas" class="tile">🏷️ Etiquetas QR</button>
@@ -501,6 +502,26 @@
     </div>
   </section>
 
+  <!-- Vista: TRAZABILIDAD / SIMULACRO DE RETIRO -->
+  <section id="view-trazabilidad" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-traza" class="btn-cerrar">✖</button>
+        <h2>🔎 Trazabilidad</h2>
+      </div>
+      <p class="label-opcional" style="margin-bottom:10px;">Escribe o escanea un lote de producto terminado, insumo, empaque o lote de trabajo (LR, SP, LM). Verás de dónde viene, en qué se usó, a qué camión y CEDIS salió y cuánto queda.</p>
+      <div class="stock-buscador">
+        <div class="fila-scan">
+          <input type="text" id="traza-lote" placeholder="Lote (ej. LMKSJ-7, C-7, LR7RA-1)" autocapitalize="characters" autocomplete="off">
+          <button type="button" id="btn-traza-qr" class="btn-scan" title="Escanear etiqueta">📷</button>
+        </div>
+      </div>
+      <button id="btn-traza-buscar" class="btn-primary btn-large" style="width:100%;margin-top:8px;">🔎 Rastrear lote</button>
+      <div id="traza-resultado" style="margin-top:12px;"></div>
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
+    </div>
+  </section>
+
   <!-- Vista: USUARIOS (admin) -->
   <section id="view-usuarios" class="view-section hidden">
     <div class="stock-container">
@@ -650,7 +671,7 @@
   <button id="scanner-cerrar">Cerrar</button>
 </div>
 
-<script src="app.js?v=20261023a"></script>
+<script src="app.js?v=20261023b"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();
