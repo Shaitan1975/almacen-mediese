@@ -235,6 +235,7 @@ const App = (() => {
     on("btn-imp-revisar", "click", revisarImportacion);
     on("btn-imp-importar", "click", ejecutarImportacion);
     on("imp-periodo", "change", ajustarPeriodo);
+    on("imp-archivo", "change", tomarArchivoCCP);
     ["imp-archivo", "imp-anio", "imp-modo", "imp-periodo", "imp-mes", "imp-desde", "imp-hasta", "imp-status"]
       .forEach(id => on(id, "change", () => { planImport = null; $("btn-imp-importar").classList.add("hidden"); }));
     on("btn-usuarios", "click", verUsuarios);
@@ -1304,9 +1305,25 @@ const App = (() => {
   }
   function num(v) { const n = parseFloat(String(v === undefined || v === null ? "" : v).replace(/,/g, "")); return isNaN(n) ? 0 : n; }
 
+  // El archivo se lee al elegirlo: si Excel u OneDrive lo cambian después, ya tenemos la copia
+  let ccpBuffer = null, ccpNombre = "";
+  async function tomarArchivoCCP() {
+    ccpBuffer = null; ccpNombre = "";
+    const archivo = $("imp-archivo").files[0];
+    if (!archivo) return;
+    try { ccpBuffer = await archivo.arrayBuffer(); ccpNombre = archivo.name; }
+    catch (e) { msg($("imp-status-msg"), "❌ " + MSG_ARCHIVO_BLOQUEADO, "error"); }
+  }
+  const MSG_ARCHIVO_BLOQUEADO = "No se pudo leer el archivo: está abierto en Excel, se modificó después de elegirlo o OneDrive lo está sincronizando. " +
+    "Ciérralo en Excel (si está en OneDrive: clic derecho → 'Mantener siempre en este dispositivo'), y vuelve a elegirlo.";
+
   async function leerCCP(archivo) {
     await cargarScript("xlsx.full.min.js");
-    const buf = await archivo.arrayBuffer();
+    let buf = ccpBuffer && ccpNombre === archivo.name ? ccpBuffer : null;
+    if (!buf) {
+      try { buf = await archivo.arrayBuffer(); }
+      catch (e) { throw new Error(MSG_ARCHIVO_BLOQUEADO); }
+    }
     let wb;
     try { wb = XLSX.read(buf, { type: "array", cellDates: true }); }
     catch (e) {
