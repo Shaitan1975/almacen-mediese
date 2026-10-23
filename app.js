@@ -1550,6 +1550,33 @@ const App = (() => {
         fila("🫘", "Soya", r.ruta.Soya) + fila("🔥", "Proceso", r.ruta.Proceso) + fila("📦", "Empaque", r.ruta.Empaque) + fila("•", "Otros", r.ruta.Otro) +
         fila("🚚", "Camiones", r.ruta.Camiones) + fila("🏬", "CEDIS", r.ruta.CEDIS) + "</div></div>";
     }
+    // ¿Dónde terminó? (cuando se busca un insumo)
+    if (r.donde_termino && r.donde_termino.length) {
+      h += '<div class="traza-sec"><h3>🎯 ¿Dónde terminó?</h3>';
+      r.donde_termino.forEach(d => {
+        const n = r.nodos[d.key] || {};
+        h += '<div class="traza-card"><b>' + esc(n.cod + " · " + (n.desc || "") + " — lote " + n.lote) + "</b>" +
+          '<div class="traza-grid"><span>Entró</span><b>' + f(d.entrada) + " " + esc(d.unid) + "</b>" +
+          "<span>📦 Sigue en almacén (insumo)</span><b>" + f(d.en_almacen) + "</b>" +
+          "<span>🏭 Se usó en producción</span><b>" + f(d.en_produccion) + "</b>" +
+          (d.sin_producto ? '<span>⚠️ En lotes sin producto registrado</span><b class="mal">' + f(d.sin_producto) + "</b>" : "") +
+          (d.otras ? "<span>🗑️ Merma / otras salidas</span><b>" + f(d.otras) + "</b>" : "") + "</div></div>";
+      });
+      if (r.pt_finales && r.pt_finales.length) {
+        const tot = r.pt_finales.reduce((a, p) => ({ alm: a.alm + p.en_almacen, cli: a.cli + p.a_clientes }), { alm: 0, cli: 0 });
+        h += '<p class="label-opcional" style="margin:8px 0 4px;"><b>Producto terminado que lo contiene (' + r.pt_finales.length + " lote(s)):</b> " +
+          f(tot.alm) + " pz en almacén · " + f(tot.cli) + " pz enviadas a clientes</p>";
+        h += '<table class="traza-tabla"><tr><th>PT / lote</th><th>Producido</th><th>En almacén</th><th>Enviado</th><th>Camión / CEDIS</th></tr>';
+        r.pt_finales.forEach(p => {
+          h += "<tr><td>" + esc(p.cod + " " + p.lote) + '</td><td class="num">' + f(p.producido) + '</td><td class="num">' + f(p.en_almacen) +
+            '</td><td class="num">' + f(p.a_clientes) + "</td><td>" + esc(p.camiones.join(", ") || "-") + (p.cedis.length ? "<br><small>" + esc(p.cedis.join(", ")) + "</small>" : "") + "</td></tr>";
+        });
+        h += "</table>";
+      } else if (r.donde_termino.some(d => d.en_produccion > 0)) {
+        h += '<p class="label-opcional">Aún no hay producto terminado registrado con este insumo.</p>';
+      }
+      h += "</div>";
+    }
     // Resumen / balance de masa
     h += '<div class="traza-sec"><h3>📊 Balance del lote ' + esc(r.lote) + "</h3>";
     r.balance.forEach(b => {
@@ -1603,10 +1630,10 @@ const App = (() => {
     h += '<div class="traza-sec"><h3>🚚 Salidas a clientes (' + r.clientes.length + ")</h3>";
     if (!r.clientes.length) h += '<p class="label-opcional">Ninguna salida a cliente registrada.</p>';
     else {
-      h += '<table class="traza-tabla"><tr><th>Fecha</th><th>Producto / lote</th><th>Camión</th><th>CEDIS</th><th>Tarima</th><th>Cant.</th></tr>';
+      h += '<table class="traza-tabla"><tr><th>Fecha</th><th>Producto / lote</th><th>Camión / cliente</th><th>CEDIS</th><th>Tarima</th><th>Cant.</th></tr>';
       r.clientes.forEach(c => {
         const n = r.nodos[c.producto] || {};
-        h += "<tr><td>" + esc(c.fecha) + "</td><td>" + esc(n.cod + " " + n.lote) + "</td><td>" + esc(c.destino) + "</td><td>" + esc(c.cedis || "-") +
+        h += "<tr><td>" + esc(c.fecha) + "</td><td>" + esc(n.cod + " " + n.lote) + "</td><td>" + esc(c.destino) + (c.cliente && c.cliente !== c.destino ? "<br><small>" + esc(c.cliente) + "</small>" : "") + "</td><td>" + esc(c.cedis || "-") +
           "</td><td>" + esc(c.tarima || "-") + '</td><td class="num">' + f(c.cant) + "</td></tr>";
       });
       h += "</table>";

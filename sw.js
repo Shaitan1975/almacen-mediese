@@ -6,7 +6,7 @@
 // Al publicar cambios: sube el número de CACHE.
 // ═══════════════════════════════════════════════════════════════════
 
-const CACHE = "almacen-mediese-v3-20261023d";
+const CACHE = "almacen-mediese-v3-20261023f";
 const ARCHIVOS = [
   "./",
   "./index.html",
