@@ -1541,7 +1541,15 @@ const App = (() => {
 
   function htmlTraza_(r, imprimir) {
     const f = n => fmtNum(n);
+    const tl = (tipo, lt) => (tipo && tipo !== "Otro" ? tipo + " " : "lote de trabajo ") + lt;
     let h = "";
+    // Ruta resumida
+    if (r.ruta) {
+      const fila = (ic, t, arr) => arr && arr.length ? '<div class="ruta-fila"><span>' + ic + " " + t + '</span><b>' + arr.map(esc).join(", ") + "</b></div>" : "";
+      h += '<div class="traza-sec"><h3>🧭 Ruta del lote</h3><div class="traza-card">' +
+        fila("🫘", "Soya", r.ruta.Soya) + fila("🔥", "Proceso", r.ruta.Proceso) + fila("📦", "Empaque", r.ruta.Empaque) + fila("•", "Otros", r.ruta.Otro) +
+        fila("🚚", "Camiones", r.ruta.Camiones) + fila("🏬", "CEDIS", r.ruta.CEDIS) + "</div></div>";
+    }
     // Resumen / balance de masa
     h += '<div class="traza-sec"><h3>📊 Balance del lote ' + esc(r.lote) + "</h3>";
     r.balance.forEach(b => {
@@ -1553,7 +1561,7 @@ const App = (() => {
         (b.otros ? "<span>Otras salidas</span><b>" + f(b.otros) + "</b>" : "") +
         "<span>En almacén hoy</span><b>" + f(b.en_stock) + "</b>" +
         '<span>Cuadre</span><b class="' + (ok ? "ok" : "mal") + '">' + b.porcentaje + "% " + (ok ? "✅" : "⚠️") + "</b></div>" +
-        (b.lotes_sin_producto ? '<small class="aviso-txt">⚠️ ' + b.lotes_sin_producto + " lote(s) de trabajo sin producto registrado: no se puede seguir hasta el cliente.</small>" : "") + "</div>";
+        (b.lotes_sin_producto ? '<small class="aviso-txt">⚠️ ' + b.lotes_sin_producto + " lote(s) de trabajo sin entrada de producto en almacén: esa parte no se puede seguir hasta el cliente.</small>" : "") + "</div>";
     });
     if (!r.balance.length) h += '<p class="label-opcional">Es un lote de trabajo: abajo verás sus insumos y lo que produjo.</p>';
     h += "</div>";
@@ -1565,7 +1573,7 @@ const App = (() => {
       const n = r.nodos[o.insumo] || {};
       const rec = (n.recepciones || []).map(x => esc(x.proveedor || "?") + " (" + esc(x.fecha) + ", " + f(x.cant) + ")").join("; ");
       h += '<div class="traza-item" style="margin-left:' + (o.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, o.insumo)) + "</b>" +
-        "<small>Usado: " + f(o.cant) + " " + esc(o.unid) + " en " + esc(o.lote_trabajo) + " (" + esc(o.fecha) + ")" +
+        "<small>Usado: " + f(o.cant) + " " + esc(o.unid) + " en " + esc(tl(o.tipo, o.lote_trabajo)) + " (" + esc(o.fecha) + ")" +
         (rec ? "<br>Proveedor: " + rec : "") + "</small></div>";
     });
     // Proveedor del propio lote, si es insumo recibido
@@ -1581,13 +1589,13 @@ const App = (() => {
     if (!r.destino.length) h += '<p class="label-opcional">No se usó para producir otro producto.</p>';
     r.destino.slice().sort((a, b) => a.nivel - b.nivel).forEach(d => {
       if (d.sin_producto) {
-        h += '<div class="traza-item aviso" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>Lote de trabajo ' + esc(d.lote_trabajo) + "</b>" +
+        h += '<div class="traza-item aviso" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>' + esc(tl(d.tipo, d.lote_trabajo)) + "</b>" +
           "<small>Se usaron " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " (" + esc(d.fecha) + ")<br>" +
-          "⚠️ No hay entrada de producto con el lote de trabajo " + esc(d.lote_trabajo) + ": la cadena se corta aquí. Registra la entrada del producto con ese lote de trabajo.</small></div>";
+          "⚠️ Todavía no hay entrada del producto de " + esc(d.lote_trabajo) + " en almacén, por eso no se puede seguir más adelante (a PT o CEDIS). Se completa sola cuando se registre esa entrada.</small></div>";
         return;
       }
       h += '<div class="traza-item" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, d.producto)) + "</b>" +
-        "<small>Con " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " · " + esc(d.lote_trabajo) + " (" + esc(d.fecha) + ")</small></div>";
+        "<small>" + esc(tl(d.tipo, d.lote_trabajo)) + " · usó " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " (" + esc(d.fecha) + ")</small></div>";
     });
     h += "</div>";
 

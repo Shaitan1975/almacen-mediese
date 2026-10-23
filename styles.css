@@ -994,3 +994,6 @@ html, body {
 .traza-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
 .traza-item.aviso { background: #fffbeb; border-color: #fcd34d; }
 .aviso-txt { display: block; color: #92400e; margin-top: 6px; font-size: 12px; }
+.ruta-fila { display: grid; grid-template-columns: 110px 1fr; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; }
+.ruta-fila:last-child { border-bottom: 0; }
+.ruta-fila b { word-break: break-word; }
