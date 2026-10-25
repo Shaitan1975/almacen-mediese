@@ -1557,10 +1557,10 @@ const App = (() => {
         const n = r.nodos[d.key] || {};
         h += '<div class="traza-card"><b>' + esc(n.cod + " · " + (n.desc || "") + " — lote " + n.lote) + "</b>" +
           '<div class="traza-grid"><span>Entró</span><b>' + f(d.entrada) + " " + esc(d.unid) + "</b>" +
-          "<span>📦 Sigue en almacén (insumo)</span><b>" + f(d.en_almacen) + "</b>" +
-          "<span>🏭 Se usó en producción</span><b>" + f(d.en_produccion) + "</b>" +
-          (d.sin_producto ? '<span>⚠️ En lotes sin producto registrado</span><b class="mal">' + f(d.sin_producto) + "</b>" : "") +
-          (d.otras ? "<span>🗑️ Merma / otras salidas</span><b>" + f(d.otras) + "</b>" : "") + "</div></div>";
+          "<span>📦 Sigue en almacén (insumo)</span><b>" + f(d.en_almacen) + " " + esc(d.unid) + "</b>" +
+          "<span>🏭 Se usó en producción</span><b>" + f(d.en_produccion) + " " + esc(d.unid) + "</b>" +
+          (d.sin_producto ? '<span>⚠️ En lotes sin producto registrado</span><b class="mal">' + f(d.sin_producto) + " " + esc(d.unid) + "</b>" : "") +
+          (d.otras ? "<span>🗑️ Merma / otras salidas</span><b>" + f(d.otras) + " " + esc(d.unid) + "</b>" : "") + "</div></div>";
       });
       if (r.pt_finales && r.pt_finales.length) {
         const tot = r.pt_finales.reduce((a, p) => ({ alm: a.alm + p.en_almacen, cli: a.cli + p.a_clientes }), { alm: 0, cli: 0 });
@@ -1583,10 +1583,10 @@ const App = (() => {
       const ok = b.porcentaje >= 99.5 && b.porcentaje <= 100.5;
       h += '<div class="traza-card"><b>' + esc(b.cod + (b.desc ? " · " + b.desc : "")) + "</b>" +
         '<div class="traza-grid"><span>Entró / se produjo</span><b>' + f(b.entrada) + " " + esc(b.unid) + "</b>" +
-        "<span>Salió a clientes</span><b>" + f(b.a_clientes) + "</b>" +
-        "<span>Usado en producción</span><b>" + f(b.a_produccion) + "</b>" +
-        (b.otros ? "<span>Otras salidas</span><b>" + f(b.otros) + "</b>" : "") +
-        "<span>En almacén hoy</span><b>" + f(b.en_stock) + "</b>" +
+        "<span>Salió a clientes</span><b>" + f(b.a_clientes) + " " + esc(b.unid) + "</b>" +
+        "<span>Usado en producción</span><b>" + f(b.a_produccion) + " " + esc(b.unid) + "</b>" +
+        (b.otros ? "<span>Otras salidas</span><b>" + f(b.otros) + " " + esc(b.unid) + "</b>" : "") +
+        "<span>En almacén hoy</span><b>" + f(b.en_stock) + " " + esc(b.unid) + "</b>" +
         '<span>Cuadre</span><b class="' + (ok ? "ok" : "mal") + '">' + b.porcentaje + "% " + (ok ? "✅" : "⚠️") + "</b></div>" +
         (b.lotes_sin_producto ? '<small class="aviso-txt">⚠️ ' + b.lotes_sin_producto + " lote(s) de trabajo sin entrada de producto en almacén: esa parte no se puede seguir hasta el cliente.</small>" : "") + "</div>";
     });
@@ -1596,13 +1596,18 @@ const App = (() => {
     // Origen
     h += '<div class="traza-sec"><h3>⬅️ Origen (con qué se hizo)</h3>';
     if (!r.origen.length) h += '<p class="label-opcional">Sin insumos ligados: es materia prima recibida de proveedor.</p>';
-    r.origen.slice().sort((a, b) => a.nivel - b.nivel).forEach(o => {
+    // Árbol: cada insumo justo debajo del producto en el que se usó (PT → granel → soya → insumos)
+    const itemOrigen = (o, prof) => {
       const n = r.nodos[o.insumo] || {};
-      const rec = (n.recepciones || []).map(x => esc(x.proveedor || "?") + " (" + esc(x.fecha) + ", " + f(x.cant) + ")").join("; ");
-      h += '<div class="traza-item" style="margin-left:' + (o.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, o.insumo)) + "</b>" +
+      const rec = (n.recepciones || []).map(x => esc(x.proveedor || "?") + " (" + esc(x.fecha) + ", " + f(x.cant) + " " + esc(n.unid || "") + ")").join("; ");
+      let s = '<div class="traza-item" style="margin-left:' + prof * 16 + 'px"><b>' + esc(nomNodo(r, o.insumo)) + "</b>" +
         "<small>Usado: " + f(o.cant) + " " + esc(o.unid) + " en " + esc(tl(o.tipo, o.lote_trabajo)) + " (" + esc(o.fecha) + ")" +
         (rec ? "<br>Proveedor: " + rec : "") + "</small></div>";
-    });
+      if (prof < 8) r.origen.filter(h2 => h2.producto === o.insumo && h2 !== o).forEach(h2 => { s += itemOrigen(h2, prof + 1); });
+      return s;
+    };
+    const raicesO = r.origen.filter(o => !r.origen.some(p => p.insumo === o.producto));
+    raicesO.forEach(o => { h += itemOrigen(o, 0); });
     // Proveedor del propio lote, si es insumo recibido
     r.inicio.forEach(key => {
       const n = r.nodos[key];
@@ -1614,16 +1619,20 @@ const App = (() => {
     // Destino
     h += '<div class="traza-sec"><h3>➡️ Destino (en qué se usó)</h3>';
     if (!r.destino.length) h += '<p class="label-opcional">No se usó para producir otro producto.</p>';
-    r.destino.slice().sort((a, b) => a.nivel - b.nivel).forEach(d => {
+    const itemDestino = (d, prof) => {
+      let s;
       if (d.sin_producto) {
-        h += '<div class="traza-item aviso" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>' + esc(tl(d.tipo, d.lote_trabajo)) + "</b>" +
+        s = '<div class="traza-item aviso" style="margin-left:' + prof * 16 + 'px"><b>' + esc(tl(d.tipo, d.lote_trabajo)) + "</b>" +
           "<small>Se usaron " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " (" + esc(d.fecha) + ")<br>" +
           "⚠️ Todavía no hay entrada del producto de " + esc(d.lote_trabajo) + " en almacén, por eso no se puede seguir más adelante (a PT o CEDIS). Se completa sola cuando se registre esa entrada.</small></div>";
-        return;
+        return s;
       }
-      h += '<div class="traza-item" style="margin-left:' + (d.nivel - 1) * 14 + 'px"><b>' + esc(nomNodo(r, d.producto)) + "</b>" +
+      s = '<div class="traza-item" style="margin-left:' + prof * 16 + 'px"><b>' + esc(nomNodo(r, d.producto)) + "</b>" +
         "<small>" + esc(tl(d.tipo, d.lote_trabajo)) + " · usó " + f(d.cant_usada) + " " + esc(d.unid) + " de " + esc(nomNodo(r, d.insumo)) + " (" + esc(d.fecha) + ")</small></div>";
-    });
+      if (prof < 8) r.destino.filter(h2 => h2.insumo === d.producto && h2 !== d).forEach(h2 => { s += itemDestino(h2, prof + 1); });
+      return s;
+    };
+    r.destino.filter(d => !r.destino.some(p => p.producto && p.producto === d.insumo)).forEach(d => { h += itemDestino(d, 0); });
     h += "</div>";
 
     // Clientes
