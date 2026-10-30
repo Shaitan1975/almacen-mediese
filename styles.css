@@ -997,3 +997,32 @@ html, body {
 .ruta-fila { display: grid; grid-template-columns: 110px 1fr; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; }
 .ruta-fila:last-child { border-bottom: 0; }
 .ruta-fila b { word-break: break-word; }
+
+/* ── Tarimas PT ── */
+.tar-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.tar-botones > button { flex: 1 1 140px; margin: 0; }
+.tar-acciones { margin-top: 12px; }
+.tar-sub { font-size: 15px; margin: 16px 0 8px; color: var(--azul, #1e3a5f); }
+.tar-etq { display: block; font-weight: 600; font-size: 14px; margin: 10px 0 6px; }
+.tar-item { border-left: 5px solid #94A3B8; }
+.tar-item.tar-abierta { border-left-color: #EA580C; }
+.tar-item.tar-completa { border-left-color: #16A34A; }
+.tar-item.tar-parcial { border-left-color: #EAB308; }
+.tar-item.tar-cancelada { opacity: .55; }
+.tar-fila { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.tar-item .sub, #tar-detalle .sub { font-size: 12px; color: #64748B; margin-top: 2px; }
+.tar-lote { display: grid; grid-template-columns: 1.4fr .9fr 1.3fr 34px; gap: 6px; margin-bottom: 6px; }
+.tar-lote input { min-width: 0; padding: 10px 8px; font-size: 15px; border: 1px solid var(--gris-borde, #cbd5e1); border-radius: 8px; }
+.tl-quitar { border: none; background: #FEE2E2; color: #B91C1C; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.tar-total { margin: 4px 0 10px; font-weight: 600; font-size: 14px; }
+.tar-barra { height: 10px; background: #E2E8F0; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+#tar-barra { height: 100%; width: 0; background: #F59E0B; transition: width .2s; }
+#tar-barra.llena { background: #16A34A; }
+#tar-barra.exceso { background: #DC2626; }
+.tar-cerrar { margin: 4px 0 10px; font-size: 13px; }
+#tar-actual { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 10px; padding: 10px; font-size: 13px; margin-bottom: 10px; }
+.tar-det-cab { border-left: 8px solid #94A3B8; padding: 8px 10px; background: #F8FAFC; border-radius: 8px; margin: 8px 0; }
+.tar-id { font-size: 18px; }
+.tar-tabla { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 14px; }
+.tar-tabla th, .tar-tabla td { border-bottom: 1px solid #E2E8F0; padding: 6px; text-align: left; }
+@media (max-width: 380px) { .tar-lote { grid-template-columns: 1fr 1fr; } .tar-lote .tl-fecha { grid-column: 1; } }

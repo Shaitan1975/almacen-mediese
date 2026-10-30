@@ -7,7 +7,7 @@
 <title>Almacén Mediese - App</title>
 <link rel="icon" type="image/png" href="icono_192x192.png">
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="styles.css?v=20261025a">
+<link rel="stylesheet" href="styles.css?v=20261030a">
 </head>
 <body class="app-body">
 
@@ -46,6 +46,7 @@
         <button id="btn-trazabilidad" class="tile tile-mov hidden">🔎 Trazabilidad</button>
         <button id="btn-alertas" class="tile tile-alerta hidden">🔔 Alertas stock <span id="badge-alertas" class="badge hidden"></span></button>
         <button id="btn-conteos" class="tile tile-conteos hidden">🧮 Conteos <span id="badge-conteos" class="badge hidden"></span></button>
+        <button id="btn-tarimas" class="tile tile-entrada">🧱 Tarimas PT<small>Etiqueta por tarima</small></button>
         <button id="btn-etiquetas" class="tile">🏷️ Etiquetas QR</button>
         <button id="btn-usuarios" class="tile tile-admin hidden">👥 Usuarios</button>
         <button id="btn-importar-ccp" class="tile tile-admin hidden">📥 Importar CCP</button>
@@ -489,6 +490,52 @@
     </div>
   </section>
 
+  <!-- Vista: TARIMAS DE PRODUCTO TERMINADO -->
+  <section id="view-tarimas" class="view-section hidden">
+    <div class="stock-container">
+      <div class="form-header">
+        <button id="btn-cerrar-tarimas" class="btn-cerrar">✖</button>
+        <h2>🧱 Tarimas PT</h2>
+      </div>
+
+      <div id="tar-inicio">
+        <p class="label-opcional" style="margin-bottom:10px;">Una etiqueta por tarima. Si la tarima no se llena en el turno queda <b>abierta</b>: al día siguiente escanéala y agrégale los lotes.</p>
+        <div class="tar-botones">
+          <button id="btn-tar-nueva" class="btn-primary">➕ Nueva tarima</button>
+          <button id="btn-tar-escanear" class="btn-secondary">📷 Escanear tarima</button>
+        </div>
+        <div class="stock-buscador" style="margin-top:12px;"><input type="text" id="tar-buscar" placeholder="🔍 Buscar por número de tarima, producto o lote..." autocomplete="off"></div>
+        <h3 class="tar-sub">🟠 Abiertas (por completar)</h3>
+        <div id="tar-abiertas"></div>
+        <h3 class="tar-sub">🕒 Recientes</h3>
+        <div id="tar-recientes"></div>
+      </div>
+
+      <div id="tar-form" class="hidden">
+        <h3 id="tar-form-titulo" class="tar-sub">Nueva tarima</h3>
+        <div id="tar-actual" class="hidden"></div>
+        <div id="tar-grupo-producto" class="form-group">
+          <label for="tar-producto">Producto *</label>
+          <select id="tar-producto"></select>
+        </div>
+        <label class="tar-etq">Lotes que lleva *</label>
+        <div id="tar-lotes"></div>
+        <button id="btn-tar-mas-lote" type="button" class="btn-secondary" style="width:100%;margin:6px 0 10px;">+ Otro lote</button>
+        <div class="tar-total"><div id="tar-total-txt">0 / 5,200 PZ</div><div class="tar-barra"><div id="tar-barra"></div></div></div>
+        <label class="check-fila tar-cerrar"><input type="checkbox" id="tar-cerrar"> Cerrar como <b>PARCIAL</b> (ya no se va a completar, cambia el producto)</label>
+        <div id="tar-msg" class="send-status"></div>
+        <div class="tar-botones">
+          <button id="btn-tar-guardar" class="btn-primary">💾 Guardar e imprimir</button>
+          <button id="btn-tar-cancelar-form" class="btn-secondary">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="tar-detalle" class="hidden"></div>
+
+      <button class="btn-volver" onclick="App.volverAlMenu()">← Volver al menú</button>
+    </div>
+  </section>
+
   <!-- Vista: ALERTAS (supervisor) -->
   <section id="view-alertas" class="view-section hidden">
     <div class="stock-container">
@@ -671,7 +718,7 @@
   <button id="scanner-cerrar">Cerrar</button>
 </div>
 
-<script src="app.js?v=20261025a"></script>
+<script src="app.js?v=20261030a"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     App.initApp();

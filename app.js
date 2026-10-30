@@ -250,6 +250,14 @@ const App = (() => {
     on("btn-conteo", "click", abrirConteo);
     on("btn-conteos", "click", verConteos);
     on("btn-etiquetas", "click", verEtiquetas);
+    on("btn-tarimas", "click", abrirTarimas);
+    on("btn-cerrar-tarimas", "click", volverAlMenu);
+    on("btn-tar-nueva", "click", nuevaTarima);
+    on("btn-tar-escanear", "click", escanearTarima);
+    on("btn-tar-mas-lote", "click", () => agregarRenglonTar());
+    on("btn-tar-guardar", "click", guardarTarima);
+    on("btn-tar-cancelar-form", "click", cargarListaTarimas);
+    on("tar-buscar", "input", () => { clearTimeout(tar.buscarTimer); tar.buscarTimer = setTimeout(cargarListaTarimas, 400); });
     on("btn-scan-ubic", "click", escanearUbicacionConteo);
     on("btn-scan-conteo", "click", escanearEnConteo);
     on("btn-mas", "click", () => ajustarCantidad(1));
@@ -361,7 +369,7 @@ const App = (() => {
   const VISTAS = ["view-menu", "view-form", "view-exito", "view-historial", "view-loading",
     "view-dashboard", "view-stock", "view-abrir-lote", "view-cerrar-lote",
     "view-lotes", "view-lote-movs", "view-editar-movs", "view-usuarios",
-    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas", "view-importar", "view-trazabilidad"];
+    "view-usuario-form", "view-password", "view-alertas", "view-conteo", "view-conteos", "view-etiquetas", "view-importar", "view-trazabilidad", "view-tarimas"];
 
   function mostrarVista(id) {
     VISTAS.forEach(v => { const el = $(v); if (el) el.classList.add("hidden"); });
@@ -1511,7 +1519,13 @@ const App = (() => {
     if (!txt) return;
     const t = String(txt).trim();
     let lote = "";
-    if (/^ALM\|/i.test(t)) lote = (t.split("|")[2] || t.split("|")[1] || "").trim();
+    if (/^TAR\|/i.test(t)) {                                                          // etiqueta de tarima de PT
+      const r = await api("tarima_obtener", { id: t });
+      if (!r.ok) return alert("❌ " + r.error);
+      const ls = r.tarima.lotes.map(l => l.lote);
+      lote = ls.length === 1 ? ls[0] : (prompt("La tarima " + r.tarima.id + " lleva estos lotes:\n" + ls.join(", ") + "\n\n¿Cuál rastreo?", ls[0]) || "");
+      if (!lote) return;
+    } else if (/^ALM\|/i.test(t)) lote = (t.split("|")[2] || t.split("|")[1] || "").trim();
     else if (/LOTES:/i.test(t)) lote = (/LOTES:([^:|,]+)/i.exec(t) || [])[1] || "";     // QR de tarima de Visor
     else lote = t;
     $("traza-lote").value = lote.toUpperCase();
@@ -2399,6 +2413,282 @@ const App = (() => {
       ".ext{font-size:8pt;font-weight:bold;margin-top:1mm} @media print{.barra{display:none} .et{border-color:#ddd}}" +
       "</style></head><body><div class='barra'><button onclick='window.print()'>🖨️ Imprimir</button>" + total +
       " etiquetas · Papel carta, escala 100%</div><div class='hoja'>" + html + "</div></body></html>");
+    w.document.close();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TARIMAS DE PRODUCTO TERMINADO: una etiqueta (hoja carta) por tarima
+  //   QR "TAR|TAR26-00001". Parciales: se escanean y se les agregan lotes.
+  // ═══════════════════════════════════════════════════════════════
+
+  const tar = { capacidad: 5200, abiertas: [], recientes: [], actual: null, buscarTimer: null };
+  // Colores por semana de producción (el nombre va impreso: sirve aunque la impresora sea en blanco y negro)
+  const COLORES_SEMANA = [
+    ["AZUL", "#1D4ED8"], ["VERDE", "#15803D"], ["AMARILLO", "#EAB308"],
+    ["ROJO", "#DC2626"], ["MORADO", "#7E22CE"], ["NARANJA", "#EA580C"],
+  ];
+  const colorSemana = s => COLORES_SEMANA[(Number(s) || 0) % COLORES_SEMANA.length];
+  const ESTADO_TAR = {
+    ABIERTA: ["🟠", "PARCIAL · se completa después"], COMPLETA: ["🟢", "COMPLETA"],
+    PARCIAL: ["🟡", "PARCIAL · cerrada"], CANCELADA: ["⚫", "CANCELADA"],
+  };
+
+  function productosPT() {
+    const cat = catalogoCache || [];
+    const pt = cat.filter(i => /^MK/i.test(i.codigo) || String(i.categoria).toUpperCase() === "PT");
+    return pt.length ? pt : cat.filter(i => String(i.unidad).toUpperCase() === "PZ");
+  }
+
+  async function abrirTarimas() {
+    cargando("Cargando tarimas...");
+    if (!catalogoCache) await cargarCatalogos();
+    $("tar-buscar").value = "";
+    mostrarVista("view-tarimas");
+    await cargarListaTarimas();
+  }
+
+  function mostrarPanelTar(cual) {
+    ["tar-inicio", "tar-form", "tar-detalle"].forEach(id => $(id).classList.toggle("hidden", id !== cual));
+    window.scrollTo(0, 0);
+  }
+
+  async function cargarListaTarimas() {
+    mostrarPanelTar("tar-inicio");
+    $("tar-abiertas").innerHTML = '<p class="vacio">Cargando...</p>';
+    $("tar-recientes").innerHTML = "";
+    const r = await api("tarimas_listar", { q: $("tar-buscar").value.trim() });
+    if (!r.ok) { $("tar-abiertas").innerHTML = '<p class="vacio">❌ ' + esc(r.error) + "</p>"; return; }
+    tar.capacidad = r.capacidad || 5200;
+    tar.abiertas = r.abiertas; tar.recientes = r.recientes;
+    pintarListaTar($("tar-abiertas"), r.abiertas, "No hay tarimas abiertas.");
+    pintarListaTar($("tar-recientes"), r.recientes, "Todavía no hay tarimas registradas.");
+  }
+
+  function pintarListaTar(cont, lista, vacio) {
+    cont.innerHTML = lista.length ? "" : '<p class="vacio">' + vacio + "</p>";
+    lista.forEach(t => {
+      const d = document.createElement("div");
+      d.className = "item-toque tar-item tar-" + t.estado.toLowerCase();
+      const e = ESTADO_TAR[t.estado] || ["", t.estado];
+      d.innerHTML = '<div class="tar-fila"><b>' + esc(t.id) + '</b><span>' + e[0] + " " + fmtNum(t.pz_total) + " / " + fmtNum(t.capacidad) + " PZ</span></div>" +
+        '<div class="sub">' + esc(t.codigo) + " · " + esc(t.descripcion) + "</div>" +
+        '<div class="sub">Lotes: ' + esc(t.lotes.map(l => l.lote).join(", ")) + " · Prod. " + esc(t.fecha_prod) + "</div>";
+      d.onclick = () => verDetalleTarima(t);
+      cont.appendChild(d);
+    });
+  }
+
+  function renglonLoteTar(datos) {
+    datos = datos || {};
+    const d = document.createElement("div");
+    d.className = "tar-lote";
+    d.innerHTML =
+      '<input type="text" class="tl-lote" placeholder="Lote (LMKSA-1)" autocapitalize="characters" autocomplete="off">' +
+      '<input type="number" class="tl-pz" placeholder="PZ" min="1" inputmode="numeric">' +
+      '<input type="date" class="tl-fecha" title="Fecha de producción">' +
+      '<button type="button" class="tl-quitar" title="Quitar">✖</button>';
+    d.querySelector(".tl-lote").value = datos.lote || "";
+    d.querySelector(".tl-pz").value = datos.pz || "";
+    d.querySelector(".tl-fecha").value = datos.fecha || hoyISO();
+    d.querySelector(".tl-fecha").max = hoyISO();
+    d.querySelector(".tl-quitar").onclick = () => { d.remove(); if (!$("tar-lotes").children.length) agregarRenglonTar(); totalTar(); };
+    d.querySelectorAll("input").forEach(i => { i.oninput = totalTar; });
+    return d;
+  }
+
+  function agregarRenglonTar(datos) {
+    const ult = $("tar-lotes").lastElementChild;
+    const fecha = ult ? ult.querySelector(".tl-fecha").value : "";
+    $("tar-lotes").appendChild(renglonLoteTar(Object.assign({ fecha: fecha }, datos || {})));
+    totalTar();
+  }
+
+  function leerLotesTar() {
+    return Array.from(document.querySelectorAll("#tar-lotes .tar-lote")).map(d => ({
+      lote: d.querySelector(".tl-lote").value.trim().toUpperCase(),
+      pz: Number(d.querySelector(".tl-pz").value) || 0,
+      fecha_prod: d.querySelector(".tl-fecha").value,
+    })).filter(l => l.lote || l.pz);
+  }
+
+  function totalTar() {
+    const base = tar.actual ? tar.actual.pz_total : 0;
+    const total = base + leerLotesTar().reduce((s, l) => s + l.pz, 0);
+    const cap = tar.actual ? tar.actual.capacidad : tar.capacidad;
+    $("tar-total-txt").textContent = fmtNum(total) + " / " + fmtNum(cap) + " PZ" +
+      (total > cap ? " ⚠️ se pasa por " + fmtNum(total - cap) : total === cap ? " ✅ COMPLETA" : " · faltan " + fmtNum(cap - total));
+    const b = $("tar-barra");
+    b.style.width = Math.min(100, total / cap * 100) + "%";
+    b.className = total > cap ? "exceso" : total === cap ? "llena" : "";
+    $("tar-cerrar").closest("label").classList.toggle("hidden", total >= cap);
+    return { total: total, cap: cap };
+  }
+
+  function nuevaTarima() {
+    tar.actual = null;
+    $("tar-form-titulo").textContent = "➕ Nueva tarima";
+    $("tar-actual").classList.add("hidden");
+    $("tar-grupo-producto").classList.remove("hidden");
+    const prods = productosPT();
+    $("tar-producto").innerHTML = '<option value="">— Elige el producto —</option>' +
+      prods.map(p => '<option value="' + esc(p.codigo) + '">' + esc(p.codigo + " · " + p.descripcion) + "</option>").join("");
+    $("tar-lotes").innerHTML = "";
+    agregarRenglonTar();
+    $("tar-cerrar").checked = false;
+    msg($("tar-msg"), "");
+    mostrarPanelTar("tar-form");
+  }
+
+  function continuarTarima(t) {
+    if (t.estado !== "ABIERTA") return alert("La tarima " + t.id + " está " + t.estado + ": ya no se le agregan lotes.");
+    tar.actual = t;
+    $("tar-form-titulo").textContent = "➕ Completar " + t.id;
+    $("tar-grupo-producto").classList.add("hidden");
+    const a = $("tar-actual");
+    a.innerHTML = "<b>" + esc(t.codigo) + " · " + esc(t.descripcion) + "</b><br>Ya lleva: " +
+      t.lotes.map(l => esc(l.lote) + " · " + fmtNum(l.pz) + " PZ (" + esc(l.fecha_prod) + ")").join("<br>");
+    a.classList.remove("hidden");
+    $("tar-lotes").innerHTML = "";
+    agregarRenglonTar({ fecha: hoyISO() });
+    $("tar-cerrar").checked = false;
+    msg($("tar-msg"), "");
+    mostrarPanelTar("tar-form");
+  }
+
+  async function guardarTarima() {
+    const st = $("tar-msg");
+    const lotes = leerLotesTar();
+    if (!tar.actual && !$("tar-producto").value) return msg(st, "Elige el producto.", "error");
+    if (!lotes.length) return msg(st, "Escribe al menos un lote con sus PZ.", "error");
+    for (const l of lotes) {
+      if (!l.lote) return msg(st, "Hay un renglón sin lote.", "error");
+      if (!(l.pz > 0)) return msg(st, "Pon las PZ del lote " + l.lote + ".", "error");
+      if (!l.fecha_prod) return msg(st, "Pon la fecha de producción del lote " + l.lote + ".", "error");
+    }
+    const raros = lotes.filter(l => !/^(LM|LB)/.test(l.lote)).map(l => l.lote);
+    if (raros.length && !confirm("Estos lotes no empiezan con LM o LB (producto terminado):\n" + raros.join(", ") + "\n\n¿Están bien escritos?")) return;
+    const { total, cap } = totalTar();
+    if (total > cap) return msg(st, "Se pasa de " + fmtNum(cap) + " PZ. Revisa las cantidades.", "error");
+
+    const btn = $("btn-tar-guardar");
+    btn.disabled = true;
+    msg(st, "Guardando...");
+    try {
+      const cerrar = $("tar-cerrar").checked;
+      let r;
+      if (tar.actual) r = await api("tarima_agregar", { id: tar.actual.id, lotes: lotes, cerrar: cerrar }, "POST");
+      else {
+        const p = (catalogoCache || []).find(i => i.codigo === $("tar-producto").value) || {};
+        r = await api("tarima_crear", { codigo: p.codigo, descripcion: p.descripcion || "", lotes: lotes, cerrar: cerrar }, "POST");
+      }
+      if (!r.ok) return msg(st, "❌ " + r.error, "error");
+      tar.actual = null;
+      imprimirTarima(r.tarima);
+      verDetalleTarima(r.tarima, "✅ " + r.mensaje + " Si no se abrió la etiqueta, usa 🖨️ Reimprimir.");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function verDetalleTarima(t, aviso) {
+    const e = ESTADO_TAR[t.estado] || ["", t.estado];
+    const [nomColor, hex] = colorSemana(t.semana);
+    let h = (aviso ? '<div class="send-status ok">' + esc(aviso) + "</div>" : "") +
+      '<div class="tar-det-cab" style="border-left-color:' + hex + '"><div class="tar-fila"><b class="tar-id">' + esc(t.id) + "</b><span>" + e[0] + " " + esc(e[1]) + "</span></div>" +
+      "<div>" + esc(t.codigo) + " · " + esc(t.descripcion) + "</div>" +
+      '<div class="sub">Semana ' + esc(t.semana) + " · " + nomColor + " · producción más vieja " + esc(t.fecha_prod) + "</div></div>" +
+      '<table class="tar-tabla"><tr><th>Lote</th><th>PZ</th><th>Fecha prod.</th></tr>' +
+      t.lotes.map(l => "<tr><td>" + esc(l.lote) + "</td><td>" + fmtNum(l.pz) + "</td><td>" + esc(l.fecha_prod) + "</td></tr>").join("") +
+      "<tr><th>Total</th><th>" + fmtNum(t.pz_total) + " / " + fmtNum(t.capacidad) + "</th><th></th></tr></table>" +
+      '<div class="sub">Creada ' + esc(t.creada) + " por " + esc(t.creada_por) + (t.actualizada !== t.creada ? " · Última vez " + esc(t.actualizada) + " por " + esc(t.actualizada_por) : "") + "</div>" +
+      (t.notas ? '<div class="sub">📝 ' + esc(t.notas) + "</div>" : "") + '<div class="tar-botones tar-acciones">';
+    if (t.estado === "ABIERTA") h += '<button class="btn-primary" data-acc="continuar">➕ Agregar lotes</button>';
+    if (t.estado !== "CANCELADA") h += '<button class="btn-secondary" data-acc="imprimir">🖨️ Reimprimir</button>';
+    if (t.estado === "ABIERTA") h += '<button class="btn-secondary" data-acc="cerrar">🟡 Cerrar como parcial</button>';
+    if (t.estado !== "CANCELADA" && esSupervisor()) h += '<button class="btn-secondary" data-acc="cancelar">⚫ Cancelar tarima</button>';
+    h += '<button class="btn-secondary" data-acc="lista">← Lista de tarimas</button></div>';
+    const cont = $("tar-detalle");
+    cont.innerHTML = h;
+    cont.querySelectorAll("[data-acc]").forEach(b => { b.onclick = () => accionTarima(b.dataset.acc, t); });
+    mostrarPanelTar("tar-detalle");
+  }
+
+  async function accionTarima(acc, t) {
+    if (acc === "continuar") return continuarTarima(t);
+    if (acc === "imprimir") return imprimirTarima(t);
+    if (acc === "lista") return cargarListaTarimas();
+    let r;
+    if (acc === "cerrar") {
+      if (!confirm("¿Cerrar " + t.id + " como PARCIAL con " + fmtNum(t.pz_total) + " PZ?\nYa no se le podrán agregar lotes.")) return;
+      r = await api("tarima_cerrar", { id: t.id }, "POST");
+    } else if (acc === "cancelar") {
+      const motivo = prompt("Motivo para cancelar " + t.id + " (ej. etiqueta repetida, error de captura):");
+      if (!motivo) return;
+      r = await api("tarima_cancelar", { id: t.id, motivo: motivo }, "POST");
+    }
+    if (!r) return;
+    if (!r.ok) return alert("❌ " + r.error);
+    verDetalleTarima(r.tarima, "✅ " + r.mensaje + (acc === "cerrar" ? " Reimprime la etiqueta para que diga PARCIAL." : ""));
+  }
+
+  async function escanearTarima() {
+    const txt = await escanearQR("Apunta al QR de la etiqueta de la tarima");
+    if (!txt) return;
+    if (!/^TAR\|/i.test(String(txt).trim())) return alert("Esa no es una etiqueta de tarima de PT.");
+    cargando("Buscando tarima...");
+    const r = await api("tarima_obtener", { id: String(txt).trim() });
+    mostrarVista("view-tarimas");
+    if (!r.ok) { alert("❌ " + r.error); return cargarListaTarimas(); }
+    if (r.tarima.estado === "ABIERTA") continuarTarima(r.tarima);
+    else verDetalleTarima(r.tarima);
+  }
+
+  // Etiqueta hoja carta: se lee de lejos. Franja de color + semana para el PEPS visual.
+  async function imprimirTarima(t) {
+    const w = window.open("", "_blank");
+    if (!w) return alert("Permite las ventanas emergentes de este sitio para imprimir.");
+    try { await cargarScript("qrcode.min.js"); }
+    catch (e) { w.close(); return alert("No se pudo cargar el generador de QR. Revisa tu conexión."); }
+    const q = window.qrcode(0, "M");
+    q.addData("TAR|" + t.id);
+    q.make();
+    const [nomColor, hex] = colorSemana(t.semana);
+    const est = t.estado === "COMPLETA" ? "COMPLETA" : "PARCIAL";
+    const nota = t.estado === "ABIERTA" ? "Se completa en el siguiente turno: escanear y agregar lotes" :
+      t.estado === "PARCIAL" ? "Parcial cerrada (no se completará)" : "";
+    const filas = t.lotes.map(l => "<tr><td>" + esc(l.lote) + "</td><td>" + fmtNum(l.pz) + "</td><td>" + esc(l.fecha_prod) + "</td></tr>").join("");
+    const copias = 2;
+    const una = '<div class="et">' +
+      '<div class="banda" style="background:' + hex + '">SEMANA ' + esc(t.semana) + " · " + nomColor + "</div>" +
+      '<div class="cab"><div><div class="cod">' + esc(t.codigo) + '</div><div class="desc">' + esc(t.descripcion) + "</div></div>" +
+      '<div class="est ' + est.toLowerCase() + '">' + est + "</div></div>" +
+      '<div class="prod">PRODUCCIÓN: <b>' + esc(t.fecha_prod) + "</b></div>" +
+      '<table><tr><th>LOTE</th><th>PZ</th><th>FECHA PROD.</th></tr>' + filas + "</table>" +
+      '<div class="pie"><div class="tot">TOTAL <b>' + fmtNum(t.pz_total) + "</b> PZ<small>de " + fmtNum(t.capacidad) + "</small>" +
+      (nota ? '<div class="nota">' + esc(nota) + "</div>" : "") + "</div>" +
+      '<div class="qr">' + q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }) + '<div class="id">' + esc(t.id) + "</div></div></div>" +
+      '<div class="firma">Impresa ' + new Date().toLocaleString("es-MX") + " · " + esc(usuarioActual ? usuarioActual.nombre : "") + "</div></div>";
+    w.document.write("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+      "<title>Tarima " + esc(t.id) + "</title><style>" +
+      "@page{size:letter;margin:8mm} *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+      "body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000}" +
+      ".barra{padding:10px;background:#f1f5f9;font-size:14px} .barra button{font-size:16px;padding:8px 16px;margin-right:8px}" +
+      ".et{height:255mm;border:3px solid #000;padding:6mm;display:flex;flex-direction:column;gap:4mm;page-break-after:always;break-after:page}" +
+      ".et:last-child{page-break-after:auto;break-after:auto}" +
+      ".banda{color:#fff;font-size:34pt;font-weight:bold;text-align:center;padding:4mm;border:2px solid #000;text-shadow:0 0 3px #000}" +
+      ".cab{display:flex;justify-content:space-between;align-items:center;gap:4mm} .cod{font-size:30pt;font-weight:bold} .desc{font-size:16pt}" +
+      ".est{font-size:24pt;font-weight:bold;border:4px solid #000;padding:2mm 5mm;white-space:nowrap} .est.parcial{border-style:dashed}" +
+      ".prod{font-size:22pt} .prod b{font-size:30pt}" +
+      "table{width:100%;border-collapse:collapse;font-size:22pt} th,td{border:2px solid #000;padding:2mm 3mm;text-align:left} th{font-size:13pt;background:#eee}" +
+      "td:first-child{font-weight:bold;font-size:26pt}" +
+      ".pie{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:6mm}" +
+      ".tot{font-size:22pt} .tot b{font-size:48pt} .tot small{display:block;font-size:12pt} .nota{font-size:12pt;margin-top:2mm;font-weight:bold}" +
+      ".qr{width:62mm;text-align:center} .qr svg{width:62mm;height:62mm;display:block} .id{font-size:16pt;font-weight:bold;margin-top:1mm}" +
+      ".firma{font-size:9pt;color:#444;text-align:right}" +
+      "@media print{.barra{display:none}}" +
+      "</style></head><body><div class='barra'><button onclick='window.print()'>🖨️ Imprimir</button>" + copias +
+      " hojas (una para cada lado de la tarima) · Papel carta, escala 100%. Si tu impresora es en blanco y negro, el color se lee en el texto de la franja.</div>" +
+      una.repeat(copias) + "</body></html>");
     w.document.close();
   }
 
