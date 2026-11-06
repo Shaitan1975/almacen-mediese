@@ -1380,6 +1380,12 @@ const App = (() => {
     return r;
   }
 
+  // "C29-2026", "C029", "c29" → "C29" (mismo criterio que el servidor)
+  function claveCamion(t) {
+    const m = String(t || "").trim().toUpperCase().match(/^C0*(\d+)\b/);
+    return m ? "C" + m[1] : "";
+  }
+
   function periodoElegido(anio) {
     const p = $("imp-periodo").value;
     if (p === "todo") return { desde: null, hasta: null, texto: "todo " + anio };
@@ -1414,6 +1420,21 @@ const App = (() => {
       const t = transformarCCP(filas, anio, per.desde, per.hasta, $("imp-status").value);
       if (!t.registros.length) throw new Error("No hay movimientos de " + per.texto + " en el archivo." + (t.errores ? " (" + t.errores + " filas con error)" : ""));
 
+      // Salidas de camiones que ya registró el Visor (escaneo de tarimas): no se importan para no duplicar
+      st.textContent = "Revisando salidas de camiones ya registradas por el Visor...";
+      const cv = await api("camiones_visor", { anio: anio }, "POST");
+      if (!cv.ok) throw new Error(cv.error || "No se pudieron consultar las salidas del Visor");
+      const omitidos = {};
+      t.registros = t.registros.filter(x => {
+        if (x.tipo_movimiento !== "SALIDA") return true;
+        const cam = claveCamion(x.lote_trabajo) || claveCamion(x.proveedor_cliente);
+        if (!cam || !cv.camiones[cam]) return true;
+        const o = omitidos[cam] = omitidos[cam] || { filas: 0, pz: 0 };
+        o.filas++; o.pz += Number(x.cantidad) || 0;
+        return false;
+      });
+      if (!t.registros.length) throw new Error("Todo lo de " + per.texto + " ya está registrado (salidas de camiones del Visor). No hay nada que importar.");
+
       let borrar = null;
       if (modo === "REEMPLAZAR_PERIODO") {
         st.textContent = "Consultando lo que hay en el sistema...";
@@ -1430,6 +1451,15 @@ const App = (() => {
       if (t.fuera) notas.push(t.fuera + " fuera del periodo");
       if (t.otroAnio) notas.push(t.otroAnio + " de otro año");
       if (notas.length) html += "<p class='ayuda'>No se importan: " + esc(notas.join(" · ")) + "</p>";
+      const cams = Object.keys(omitidos).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+      if (cams.length) {
+        const fmt = n => Number(n).toLocaleString("es-MX");
+        html += "<div class='visor-omit'><b>🚚 No se importan " + cams.reduce((a, c) => a + omitidos[c].filas, 0) + " salidas de " + cams.length +
+          " camión(es) que ya registró el Visor Tarimas:</b><ul>" + cams.map(c => {
+            const v = cv.camiones[c].pz, k = omitidos[c].pz, igual = Math.abs(v - k) < 0.5;
+            return "<li><b>" + esc(c) + "</b>: CCP " + fmt(k) + " pz · Visor " + fmt(v) + " pz " + (igual ? "✅" : "⚠️ <b>no coincide, revísalo</b>") + "</li>";
+          }).join("") + "</ul></div>";
+      }
       if (t.errores) html += "<p class='aviso-imp'>⚠️ " + t.errores + " filas con error se saltan:<br>" + t.ejemplosError.map(esc).join("<br>") + "</p>";
       if (modo === "REEMPLAZAR_PERIODO") {
         html += "<p class='aviso-imp'>🗑️ Se borrarán <b>" + (borrar.importados != null ? borrar.importados : borrar.total) + "</b> movimientos importados antes en ese periodo" +
