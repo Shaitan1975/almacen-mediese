@@ -2502,7 +2502,9 @@ const App = (() => {
       const e = ESTADO_TAR[t.estado] || ["", t.estado];
       d.innerHTML = '<div class="tar-fila"><b>' + esc(t.id) + '</b><span>' + e[0] + " " + fmtNum(t.pz_total) + " / " + fmtNum(t.capacidad) + " PZ</span></div>" +
         '<div class="sub">' + esc(t.codigo) + " · " + esc(t.descripcion) + "</div>" +
-        '<div class="sub">Lotes: ' + esc(t.lotes.map(l => l.lote).join(", ")) + " · Prod. " + esc(t.fecha_prod) + "</div>";
+        '<div class="sub">Lotes: ' + esc(t.lotes.map(l => l.lote).join(", ")) + " · Prod. " + esc(t.fecha_prod) + "</div>" +
+        (t.pz_embarcadas ? '<div class="sub tar-emb">🚚 ' + (t.pz_embarcadas >= t.pz_total ? "Embarcada" : "Embarcada parcial " + fmtNum(t.pz_embarcadas) + " PZ") +
+          " · " + esc((t.embarques || []).map(e => e.camion).filter((v, i, a) => v && a.indexOf(v) === i).join(", ")) + "</div>" : "");
       d.onclick = () => verDetalleTarima(t);
       cont.appendChild(d);
     });
@@ -2631,7 +2633,10 @@ const App = (() => {
       t.lotes.map(l => "<tr><td>" + esc(l.lote) + "</td><td>" + fmtNum(l.pz) + "</td><td>" + esc(l.fecha_prod) + "</td></tr>").join("") +
       "<tr><th>Total</th><th>" + fmtNum(t.pz_total) + " / " + fmtNum(t.capacidad) + "</th><th></th></tr></table>" +
       '<div class="sub">Creada ' + esc(t.creada) + " por " + esc(t.creada_por) + (t.actualizada !== t.creada ? " · Última vez " + esc(t.actualizada) + " por " + esc(t.actualizada_por) : "") + "</div>" +
-      (t.notas ? '<div class="sub">📝 ' + esc(t.notas) + "</div>" : "") + '<div class="tar-botones tar-acciones">';
+      (t.notas ? '<div class="sub">📝 ' + esc(t.notas) + "</div>" : "") +
+      ((t.embarques || []).length ? '<h3 class="tar-sub">🚚 Embarques</h3><table class="tar-tabla"><tr><th>Camión</th><th>Tarima Visor</th><th>PZ</th><th>Fecha</th></tr>' +
+        t.embarques.map(e => "<tr><td>" + esc(e.camion) + "</td><td>" + esc(e.qr_id) + "</td><td>" + fmtNum(e.pz) + "</td><td>" + esc(e.fecha) + "</td></tr>").join("") + "</table>" : "") +
+      '<div class="tar-botones tar-acciones">';
     if (t.estado === "ABIERTA") h += '<button class="btn-primary" data-acc="continuar">➕ Agregar lotes</button>';
     if (t.estado !== "CANCELADA") h += '<button class="btn-secondary" data-acc="imprimir">🖨️ Reimprimir</button>';
     if (t.estado === "ABIERTA") h += '<button class="btn-secondary" data-acc="cerrar">🟡 Cerrar como parcial</button>';
