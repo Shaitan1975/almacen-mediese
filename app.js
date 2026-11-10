@@ -2692,38 +2692,42 @@ const App = (() => {
     const nota = t.estado === "ABIERTA" ? "Se completa en el siguiente turno: escanear y agregar lotes" :
       t.estado === "PARCIAL" ? "Parcial cerrada (no se completará)" : "";
     const filas = t.lotes.map(l => "<tr><td>" + esc(l.lote) + "</td><td>" + fmtNum(l.pz) + "</td><td>" + esc(l.fecha_prod) + "</td></tr>").join("");
-    const copias = 2;
-    const una = '<div class="et">' +
+    // Dos copias en UNA hoja carta (media hoja cada una, con línea de corte): una para cada lado de la tarima
+    const muchos = t.lotes.length > 4 ? " muchos" : "";
+    const una = '<div class="et' + muchos + '">' +
       '<div class="banda" style="background:' + hex + '">SEMANA ' + esc(t.semana) + " · " + nomColor + "</div>" +
       '<div class="cab"><div><div class="cod">' + esc(t.codigo) + '</div><div class="desc">' + esc(t.descripcion) + "</div></div>" +
       '<div class="est ' + est.toLowerCase() + '">' + est + "</div></div>" +
-      '<div class="prod">PRODUCCIÓN: <b>' + esc(t.fecha_prod) + "</b></div>" +
-      '<table><tr><th>LOTE</th><th>PZ</th><th>FECHA PROD.</th></tr>' + filas + "</table>" +
-      '<div class="pie"><div class="tot">TOTAL <b>' + fmtNum(t.pz_total) + "</b> PZ<small>de " + fmtNum(t.capacidad) + "</small>" +
-      (nota ? '<div class="nota">' + esc(nota) + "</div>" : "") + "</div>" +
-      '<div class="qr">' + q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }) + '<div class="id">' + esc(t.id) + "</div></div></div>" +
+      '<div class="cuerpo"><div class="izq">' +
+        '<div class="prod">PRODUCCIÓN: <b>' + esc(t.fecha_prod) + "</b></div>" +
+        '<table><tr><th>LOTE</th><th>PZ</th><th>FECHA PROD.</th></tr>' + filas + "</table>" +
+        '<div class="tot">TOTAL <b>' + fmtNum(t.pz_total) + "</b> PZ <small>de " + fmtNum(t.capacidad) + "</small></div>" +
+        (nota ? '<div class="nota">' + esc(nota) + "</div>" : "") +
+      '</div><div class="qr">' + q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }) + '<div class="id">' + esc(t.id) + "</div></div></div>" +
       '<div class="firma">Impresa ' + new Date().toLocaleString("es-MX") + " · " + esc(usuarioActual ? usuarioActual.nombre : "") + "</div></div>";
     w.document.write("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
       "<title>Tarima " + esc(t.id) + "</title><style>" +
-      "@page{size:letter;margin:8mm} *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+      "@page{size:letter;margin:7mm} *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
       "body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#000}" +
       ".barra{padding:10px;background:#f1f5f9;font-size:14px} .barra button{font-size:16px;padding:8px 16px;margin-right:8px}" +
-      ".et{height:255mm;border:3px solid #000;padding:6mm;display:flex;flex-direction:column;gap:4mm;page-break-after:always;break-after:page}" +
-      ".et:last-child{page-break-after:auto;break-after:auto}" +
-      ".banda{color:#fff;font-size:34pt;font-weight:bold;text-align:center;padding:4mm;border:2px solid #000;text-shadow:0 0 3px #000}" +
-      ".cab{display:flex;justify-content:space-between;align-items:center;gap:4mm} .cod{font-size:30pt;font-weight:bold} .desc{font-size:16pt}" +
-      ".est{font-size:24pt;font-weight:bold;border:4px solid #000;padding:2mm 5mm;white-space:nowrap} .est.parcial{border-style:dashed}" +
-      ".prod{font-size:22pt} .prod b{font-size:30pt}" +
-      "table{width:100%;border-collapse:collapse;font-size:22pt} th,td{border:2px solid #000;padding:2mm 3mm;text-align:left} th{font-size:13pt;background:#eee}" +
-      "td:first-child{font-weight:bold;font-size:26pt}" +
-      ".pie{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:6mm}" +
-      ".tot{font-size:22pt} .tot b{font-size:48pt} .tot small{display:block;font-size:12pt} .nota{font-size:12pt;margin-top:2mm;font-weight:bold}" +
-      ".qr{width:62mm;text-align:center} .qr svg{width:62mm;height:62mm;display:block} .id{font-size:16pt;font-weight:bold;margin-top:1mm}" +
-      ".firma{font-size:9pt;color:#444;text-align:right}" +
+      ".hoja{width:201mm;height:264mm;display:flex;flex-direction:column;justify-content:space-between;break-after:page;page-break-after:always}" +
+      ".et{height:127mm;border:3px solid #000;padding:4mm;display:flex;flex-direction:column;gap:2mm;overflow:hidden}" +
+      ".corte{border-top:1.5px dashed #555;text-align:center;font-size:8pt;color:#555;line-height:0;margin:0 2mm}.corte span{background:#fff;padding:0 6px}" +
+      ".banda{color:#fff;font-size:20pt;font-weight:bold;text-align:center;padding:1.5mm;border:2px solid #000;text-shadow:0 0 3px #000}" +
+      ".cab{display:flex;justify-content:space-between;align-items:center;gap:4mm} .cod{font-size:24pt;font-weight:bold;line-height:1} .desc{font-size:11pt}" +
+      ".est{font-size:17pt;font-weight:bold;border:3px solid #000;padding:1mm 4mm;white-space:nowrap} .est.parcial{border-style:dashed}" +
+      ".cuerpo{flex:1;display:flex;gap:5mm;min-height:0} .izq{flex:1;display:flex;flex-direction:column;gap:2mm;min-width:0}" +
+      ".prod{font-size:13pt} .prod b{font-size:19pt}" +
+      "table{width:100%;border-collapse:collapse;font-size:14pt} th,td{border:1.5px solid #000;padding:1mm 2.5mm;text-align:left} th{font-size:9pt;background:#eee}" +
+      "td:first-child{font-weight:bold;font-size:17pt}" +
+      ".muchos table{font-size:11pt} .muchos td:first-child{font-size:13pt} .muchos td,.muchos th{padding:.5mm 2mm}" +
+      ".tot{font-size:14pt;margin-top:auto} .tot b{font-size:30pt} .tot small{font-size:10pt} .nota{font-size:9.5pt;font-weight:bold}" +
+      ".qr{width:46mm;flex:none;text-align:center;align-self:center} .qr svg{width:46mm;height:46mm;display:block} .id{font-size:13pt;font-weight:bold;margin-top:1mm}" +
+      ".firma{font-size:7.5pt;color:#444;text-align:right}" +
       "@media print{.barra{display:none}}" +
-      "</style></head><body><div class='barra'><button onclick='window.print()'>🖨️ Imprimir</button>" + copias +
-      " hojas (una para cada lado de la tarima) · Papel carta, escala 100%. Si tu impresora es en blanco y negro, el color se lee en el texto de la franja.</div>" +
-      una.repeat(copias) + "</body></html>");
+      "</style></head><body><div class='barra'><button onclick='window.print()'>🖨️ Imprimir</button>" +
+      "1 hoja carta con 2 copias: córtala por la línea y pega una en cada lado de la tarima · Escala 100%. Si tu impresora es en blanco y negro, el color se lee en el texto de la franja.</div>" +
+      "<div class='hoja'>" + una + "<div class='corte'><span>✂ cortar aquí</span></div>" + una + "</div></body></html>");
     w.document.close();
   }
 
